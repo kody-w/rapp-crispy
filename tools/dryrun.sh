@@ -209,6 +209,13 @@ else
   info "SKIP: no meetings recorded yet (crispy run --seconds 16)"
 fi
 
+head_ "7. Parity — no fact stated twice and differing"
+if bash "$HERE/parity.sh" >/tmp/crispy-parity.out 2>&1; then
+  while IFS= read -r l; do case "$l" in *PASS*) ok "${l#*PASS }" ;; esac; done < /tmp/crispy-parity.out
+else
+  while IFS= read -r l; do case "$l" in *FAIL*) bad "${l#*FAIL }" ;; esac; done < /tmp/crispy-parity.out
+fi
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$pass" "$fail"
 cat <<'GATED'
 

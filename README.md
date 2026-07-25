@@ -213,7 +213,9 @@ would mean measuring *their* denoiser instead of ours.
 ## Tests
 
 ```bash
-./tools/dryrun.sh
+./tools/dryrun.sh      # everything
+./tools/parity.sh      # just the no-duplicated-facts checks
+./tools/setversion.sh 1.2.1   # the ONLY way to change the version
 ```
 
 24 assertions, no microphone and no keyboard needed. Deterministic behaviour is
@@ -221,5 +223,26 @@ asserted (denoise floors, RTF, dictionary enforcement, notes structure, that the
 capture device is real hardware). Recogniser output is **measured and printed,
 not asserted** — a suite that asserts on model output goes red for the wrong
 reason.
+
+## Keeping it from rotting
+
+Every real bug in this project came from **one fact living in two places**: the
+version pinned in three files, the dictionary path defaulting differently in the
+CLI and the agent, loopback detection narrower in the agent than in the CLI, and a
+capability fact asserted in `soul.md` that the tool contradicted.
+
+Two things guard that now, and they are different cures:
+
+- **`tools/setversion.sh` is a generator.** The store spec needs `version` in three
+  files; one command writes all three and rebuilds the egg. Never edit a version by
+  hand.
+- **`tools/parity.sh` is a detector**, for what a generator cannot cover: the twin
+  agent must be byte-identical to the singleton, the egg must carry the shipped
+  agent, the CLI and agent must resolve the same defaults, and **prose must never
+  assert a fact a tool can compute** — that last rule is why the persona now defers
+  to `live_status` instead of claiming a driver is required.
+
+`dryrun.sh` runs both, so the rule is enforced by the same command that proves the
+product works.
 
 MIT.

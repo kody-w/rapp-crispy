@@ -129,10 +129,14 @@ cmd_record() {
   if [ "$screen" = 1 ]; then
     # screencapture -v records the screen; -G<id> takes audio from a device.
     # Needs the Screen Recording permission the first time.
-    c_ok "screen + audio via screencapture (grant Screen Recording if prompted)"
+    # VIDEO ONLY on purpose. `-G <n>` does not take an avfoundation index (it
+    # fails "Capture audio device N not found") and `-g` would record the DEFAULT
+    # input — usually the virtual device we deliberately avoid. The authoritative
+    # audio is mic.wav from the chosen hardware mic; `crispy run` muxes the two.
+    c_ok "screen video via screencapture (grant Screen Recording if prompted)"
     local vflag=()
     [ "$seconds" -gt 0 ] && vflag=(-V "$seconds")
-    screencapture -v "${vflag[@]}" -G "$m" "$dir/screen.mov" &
+    screencapture -v "${vflag[@]}" "$dir/screen.mov" &
     local scpid=$!
     echo "$scpid" > "$dir/.screen.pid"
   fi
@@ -274,10 +278,24 @@ cmd_notes() {
 }
 
 # ----------------------------------------------------------------------- run
+# screen video + our denoised audio -> one file you can actually play back
+mux_playback() {
+  local dir="$1"
+  [ -f "$dir/screen.mov" ] && [ -f "$dir/mic.denoised.wav" ] || return 0
+  if "$FFMPEG" -hide_banner -loglevel error -i "$dir/screen.mov" -i "$dir/mic.denoised.wav" \
+      -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 128k -shortest \
+      -y "$dir/meeting.mp4" 2>/dev/null; then
+    c_ok "meeting.mp4 $(du -h "$dir/meeting.mp4" | cut -f1) (screen + denoised audio)"
+  else
+    c_warn "could not mux meeting.mp4 — screen.mov and mic.denoised.wav are still there"
+  fi
+}
+
 cmd_run() {
   local dir; dir=$(cmd_record "$@" | tail -1)
   [ -d "$dir" ] || die "record failed"
   cmd_denoise "$dir/mic.wav" "$dir/mic.denoised.wav" >/dev/null
+  mux_playback "$dir"
   cmd_notes "$dir"
   c_blue "Done — everything is here and nowhere else:"
   ls -1 "$dir" | sed 's/^/    /'
