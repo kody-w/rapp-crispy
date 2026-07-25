@@ -1,0 +1,3 @@
+# Stdlib only. External requirements are binaries, not Python packages:
+#   ffmpeg  — must include the arnndn (RNNoise) filter
+#   whisper-server (whisper.cpp) — a local ASR server on 127.0.0.1:8765

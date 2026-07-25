@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RAPP Crispy</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --line:#242a34; --ink:#e8ecf2; --dim:#98a2b3;
+    --accent:#5ee0b0; --warn:#f0b429; --bad:#f2685f; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme:light){
+    :root{ --bg:#f6f7f9; --panel:#fff; --line:#e3e6ea; --ink:#1a1d23; --dim:#5b6472; --accent:#0f9d74; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{padding:22px 24px 14px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:20px;letter-spacing:-.01em}
+  .sub{color:var(--dim);font-size:13px;margin-top:4px}
+  .pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);border-radius:999px;
+    font-size:11px;color:var(--dim);margin-left:6px;vertical-align:2px}
+  main{padding:20px 24px 40px;max-width:960px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  button{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 13px;font-size:13px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#06251b;border-color:transparent;font-weight:600}
+  input,select{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:13px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;margin-bottom:14px}
+  .card h2{margin:0 0 10px;font-size:14px;letter-spacing:.02em;text-transform:uppercase;color:var(--dim)}
+  pre{margin:0;white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 var(--mono);color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  td.mono{font-family:var(--mono);font-size:12px}
+  .yes{color:var(--accent)} .no{color:var(--dim)}
+  .status{font-size:12px;color:var(--dim);margin-left:auto}
+  .banner{border-left:3px solid var(--warn);padding:10px 14px;background:var(--panel);
+    border-radius:0 8px 8px 0;margin-bottom:16px;font-size:13px;color:var(--dim)}
+  .banner b{color:var(--ink)}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .metric{border:1px solid var(--line);border-radius:10px;padding:12px}
+  .metric .v{font:600 20px/1.2 var(--mono)} .metric .k{color:var(--dim);font-size:11px;margin-top:3px}
+  .overflow{overflow-x:auto}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>RAPP Crispy <span class="pill">local-first</span><span class="pill" id="mode">detecting…</span></h1>
+  <div class="sub">Record, denoise, transcribe and summarise meetings without anything leaving this machine.</div>
+</header>
+
+<main>
+  <div class="banner" id="privacy">
+    <b>Where your data is.</b> Recordings, transcripts and notes are plain files under
+    <span class="mono">~/.rappcrispy/meetings/</span>. Denoising is ffmpeg on this machine,
+    transcription is a whisper.cpp server bound to <span class="mono">127.0.0.1</span>, and
+    summarisation runs through a hook you control. Nothing is uploaded.
+  </div>
+
+  <div class="row">
+    <button class="primary" id="b-doctor">Check environment</button>
+    <button id="b-list">Refresh meetings</button>
+    <button id="b-bench">Benchmark denoise</button>
+    <button id="b-live">Live mic status</button>
+    <span class="status" id="status">idle</span>
+  </div>
+
+  <div class="row">
+    <input id="secs" type="number" min="5" max="7200" value="60" style="width:92px" title="seconds">
+    <input id="name" type="text" placeholder="meeting label (optional)" style="flex:1;min-width:160px">
+    <label style="font-size:13px;color:var(--dim)">
+      <input type="checkbox" id="screen"> capture screen
+    </label>
+    <button id="b-run">Record &amp; process</button>
+  </div>
+
+  <div class="card">
+    <h2>Meetings on this machine</h2>
+    <div class="overflow">
+      <table id="tbl">
+        <thead><tr><th>Meeting</th><th>Length</th><th>Denoised</th><th>Transcript</th><th>Notes</th><th>Video</th><th></th></tr></thead>
+        <tbody><tr><td colspan="7" class="no">Nothing loaded yet — press “Refresh meetings”.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" id="out-card" hidden>
+    <h2 id="out-title">Output</h2>
+    <pre id="out"></pre>
+  </div>
+
+  <div class="card">
+    <h2>Measured denoise performance</h2>
+    <div class="metrics">
+      <div class="metric"><div class="v">−27 dB</div><div class="k">white noise floor</div></div>
+      <div class="metric"><div class="v">−15 dB</div><div class="k">pink noise floor</div></div>
+      <div class="metric"><div class="v" style="color:var(--warn)">−3.2 dB</div><div class="k">babble — known weak</div></div>
+      <div class="metric"><div class="v">0.014</div><div class="k">real-time factor</div></div>
+    </div>
+    <p style="color:var(--dim);font-size:12.5px;margin:12px 0 0">
+      RNNoise separates voice from non-voice, so <b>other people talking is the case it
+      handles badly</b> — it removes little and costs speech doing it. Stationary noise
+      (fans, traffic, keyboards, HVAC) it handles well. Press “Benchmark denoise” to
+      reproduce these on your own hardware rather than trusting the numbers.
+    </p>
+  </div>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var pending = {}, seq = 0, bridged = false;
+  var $ = function(id){ return document.getElementById(id); };
+
+  function setStatus(s){ $("status").textContent = s; }
+  function show(title, text){
+    $("out-title").textContent = title;
+    $("out").textContent = text;
+    $("out-card").hidden = false;
+  }
+
+  // The store mounts this UI in an iframe with a rapp:chat postMessage bridge.
+  // Standalone (opened as a file) there is no host, so we degrade to a clear
+  // explanation instead of pretending to have data.
+  window.addEventListener("message", function(ev){
+    var d = ev.data || {};
+    if (d.type === "rapp:ready" || d.type === "rapp:hello"){ bridged = true; $("mode").textContent = "connected"; return; }
+    if (d.type === "rapp:chat:result" && pending[d.id]){
+      var cb = pending[d.id]; delete pending[d.id];
+      cb(d.error ? { error: d.error } : { reply: d.reply });
+    }
+  });
+
+  function call(args, cb){
+    if (!bridged){
+      cb({ error: "No brainstem bridge. This UI is open standalone.\n\n" +
+        "Hatch the rapplication and open it from the RAPP store, or drive the agent directly:\n\n" +
+        "  curl -s localhost:7071/chat -H 'Content-Type: application/json' \\\n" +
+        "    -d '{\"user_input\":\"RappCrispy " + (args.action || "doctor") + "\"}'\n\n" +
+        "Or on the command line:  crispy " + (args.action || "doctor") });
+      return;
+    }
+    var id = "c" + (++seq);
+    pending[id] = cb;
+    var msg = "RappCrispy " + JSON.stringify(args);
+    parent.postMessage({ type:"rapp:chat", id:id, message:msg }, "*");
+  }
+
+  function act(args, title){
+    setStatus("running " + args.action + "…");
+    call(args, function(res){
+      setStatus("idle");
+      show(title, res.error ? res.error : res.reply);
+      if (args.action === "list" && !res.error) render(res.reply);
+    });
+  }
+
+  function render(reply){
+    var data;
+    try { data = JSON.parse(reply); } catch(e){ return; }
+    var tb = $("tbl").tBodies[0];
+    tb.innerHTML = "";
+    var ms = (data && data.meetings) || [];
+    if (!ms.length){
+      tb.innerHTML = '<tr><td colspan="7" class="no">No meetings yet.</td></tr>';
+      return;
+    }
+    ms.forEach(function(m){
+      var tr = document.createElement("tr");
+      function cell(txt, cls){ var td=document.createElement("td"); if(cls)td.className=cls; td.textContent=txt; tr.appendChild(td); }
+      function flag(v){ var td=document.createElement("td"); td.className = v?"yes":"no"; td.textContent = v?"yes":"—"; tr.appendChild(td); }
+      cell(m.meeting, "mono");
+      cell(m.seconds ? m.seconds + "s" : "—");
+      flag(m.denoised); flag(m.transcript); flag(m.notes); flag(m.video);
+      var td = document.createElement("td");
+      var b = document.createElement("button");
+      b.textContent = "open";
+      b.onclick = function(){ act({ action:"read", meeting:m.meeting }, m.meeting); };
+      td.appendChild(b); tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+  }
+
+  $("b-doctor").onclick = function(){ act({ action:"doctor" }, "Environment"); };
+  $("b-list").onclick   = function(){ act({ action:"list" }, "Meetings"); };
+  $("b-bench").onclick  = function(){ act({ action:"bench" }, "Denoise benchmark"); };
+  $("b-live").onclick   = function(){ act({ action:"live_status" }, "Live virtual microphone"); };
+  $("b-run").onclick    = function(){
+    var secs = parseInt($("secs").value, 10) || 60;
+    act({ action:"run", seconds:secs, name:$("name").value || undefined,
+          screen:$("screen").checked || undefined },
+        "Recording " + secs + "s and processing");
+  };
+
+  // announce ourselves; hosts reply with rapp:ready
+  try { parent.postMessage({ type:"rapp:hello" }, "*"); } catch(e){}
+  setTimeout(function(){ if(!bridged) $("mode").textContent = "standalone"; }, 700);
+})();
+</script>
+</body>
+</html>

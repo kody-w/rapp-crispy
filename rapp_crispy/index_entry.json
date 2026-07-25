@@ -1,0 +1,51 @@
+{
+  "id": "rapp_crispy",
+  "name": "RAPP Crispy",
+  "version": "1.0.0",
+  "summary": "A local-first meeting stack. Records a meeting, removes background noise with RNNoise, transcribes it on a whisper.cpp server bound to 127.0.0.1, and writes Summary / Decisions / Action items / Open questions through a hook you own. Audio, transcripts and notes are plain files under ~/.rappcrispy/meetings and never leave the machine. Denoise quality is measured, not asserted.",
+  "tagline": "Record, denoise, transcribe and summarise meetings entirely on your own machine.",
+  "category": "productivity",
+  "tags": [
+    "rapplication",
+    "meetings",
+    "transcription",
+    "noise-cancellation",
+    "denoise",
+    "local-first",
+    "privacy",
+    "whisper",
+    "has-ui"
+  ],
+  "manifest_name": "@kody-w/rapp-crispy-singleton",
+  "singleton_filename": "rapp_crispy_agent.py",
+  "singleton_url": "https://raw.githubusercontent.com/kody-w/rapp-crispy/main/rapp_crispy/singleton/rapp_crispy_agent.py",
+  "ui_url": "https://raw.githubusercontent.com/kody-w/rapp-crispy/main/rapp_crispy/ui/index.html",
+  "ui_filename": "index.html",
+  "egg_url": "https://raw.githubusercontent.com/kody-w/rapp-crispy/main/rapp_crispy/eggs/rapp_crispy.egg",
+  "egg_note": "Ships with no state. The egg is the hatch cartridge (twin persona + agent only) and contains no recordings, transcripts, vocabulary or personal data. Meetings you create stay on your own disk under ~/.rappcrispy/meetings.",
+  "license": "MIT",
+  "publisher": "@kody-w",
+  "quality_tier": "community",
+  "requires": {
+    "binaries": [
+      "ffmpeg (with the arnndn filter)"
+    ],
+    "services": [
+      "a local whisper.cpp server on 127.0.0.1:8765"
+    ],
+    "optional": [
+      "a loopback CoreAudio device for the live virtual microphone"
+    ]
+  },
+  "example_call": {
+    "args": {
+      "action": "doctor"
+    }
+  },
+  "source": {
+    "type": "federation",
+    "repo": "kody-w/rapp-crispy",
+    "ref": "main",
+    "path": "rapp_crispy"
+  }
+}

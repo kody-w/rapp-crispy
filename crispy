@@ -8,6 +8,7 @@
 #   crispy notes    <meeting-dir>                          summary + action items
 #   crispy run      [--screen] [--seconds N] [--name X]   the whole loop
 #   crispy bench                                           measured denoise quality
+#   crispy live     {start|stop|status|install}            live virtual microphone
 #   crispy list                                            meetings on disk
 #   crispy doctor                                          environment check
 set -uo pipefail
@@ -35,17 +36,17 @@ die()     { printf '\033[1;31mfatal:\033[0m %s\n' "$*" >&2; exit 1; }
 log()     { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOGS/crispy.log"; }
 
 # ---------------------------------------------------------------- audio device
-# Deliberately prefer the REAL hardware microphone over any virtual/loopback
-# input. Another denoiser's virtual mic is often input 0; capturing through it
-# would mean measuring its processing instead of ours.
+# Deliberately prefer a REAL hardware input over any virtual/loopback device.
+# Another denoiser's virtual mic is often input 0; capturing through it would mean
+# measuring its processing instead of ours. Override with CRISPY_MIC=<index>.
 pick_mic() {
   if [ -n "${CRISPY_MIC:-}" ]; then echo "$CRISPY_MIC"; return; fi
   local list idx
   list=$("$FFMPEG" -hide_banner -f avfoundation -list_devices true -i "" 2>&1 \
          | sed -n '/audio devices/,$p')
-  idx=$(echo "$list" | grep -iE '\[[0-9]+\] .*(MacBook|Built-in|iMac).*Microphone' \
+  idx=$(echo "$list" | grep -iE '\[[0-9]+\] .*(MacBook|Built-in|iMac|Mac mini|Mac Studio|USB|External|Headset).*(Microphone|Mic)' \
         | head -1 | sed -E 's/.*\[([0-9]+)\].*/\1/')
-  [ -n "$idx" ] || idx=$(echo "$list" | grep -viE 'krisp|teams|blackhole|loopback|aggregate|virtual' \
+  [ -n "$idx" ] || idx=$(echo "$list" | grep -viE 'blackhole|loopback|aggregate|virtual|soundflower|multi-output|teams audio|driver' \
         | grep -oE '\[[0-9]+\]' | head -1 | tr -d '[]')
   echo "${idx:-0}"
 }
@@ -253,6 +254,102 @@ cmd_run() {
   echo "$dir"
 }
 
+# --------------------------------------------------------------------- live
+# Live virtual microphone: real mic -> RNNoise -> a loopback output device that
+# conferencing apps can select as their INPUT. This is the same architecture the
+# commercial tools use (they ship their own CoreAudio driver); we borrow one.
+SINK_NAME="${SINK_NAME:-BlackHole}"
+
+# audiotoolbox (output) and avfoundation (input) enumerate separately.
+sink_index() {
+  "$FFMPEG" -hide_banner -f lavfi -i anullsrc -t 0.05 -f audiotoolbox -list_devices true - 2>&1 \
+    | grep -iE "\[[0-9]+\].*$SINK_NAME" | head -1 | sed -E 's/.*\[([0-9]+)\].*/\1/'
+}
+
+live_pidfile() { echo "$CRISPY_HOME/live.pid"; }
+
+cmd_live_status() {
+  local pf; pf=$(live_pidfile)
+  if [ -f "$pf" ] && kill -0 "$(cat "$pf")" 2>/dev/null; then
+    c_ok "live denoise RUNNING (pid $(cat "$pf")) -> $SINK_NAME"
+    c_ok "select \"$SINK_NAME\" as the microphone in your meeting app"
+    return 0
+  fi
+  c_warn "live denoise not running"
+  local s; s=$(sink_index)
+  [ -n "$s" ] && c_ok "sink device present: $SINK_NAME at output index $s" \
+              || c_warn "no \"$SINK_NAME\" device — run: crispy live install"
+  return 1
+}
+
+cmd_live_install() {
+  local s; s=$(sink_index)
+  if [ -n "$s" ]; then c_ok "$SINK_NAME already installed (output index $s)"; return 0; fi
+  cat <<'EOS'
+The live virtual microphone needs a loopback audio device. Installing a
+CoreAudio driver modifies system audio routing and requires your password, so
+it is deliberately NOT automated. Run this yourself:
+
+    brew install --cask blackhole-2ch
+
+It will ask for your password. No reboot needed; coreaudiod restarts itself.
+Then:  crispy live start
+
+To undo entirely:  brew uninstall --cask blackhole-2ch
+EOS
+  return 1
+}
+
+cmd_live_start() {
+  local s m pf
+  s=$(sink_index)
+  [ -n "$s" ] || { cmd_live_install; die "no $SINK_NAME sink device"; }
+  m=$(pick_mic)
+  pf=$(live_pidfile)
+  if [ -f "$pf" ] && kill -0 "$(cat "$pf")" 2>/dev/null; then
+    c_warn "already running (pid $(cat "$pf"))"; return 0
+  fi
+  local model="$MODELS/$RNN_MODEL.rnnn"
+  [ -f "$model" ] || die "model missing: $model"
+  c_blue "Live denoise: [$m] $(mic_name "$m")  ->  $SINK_NAME (out $s)"
+  # low-delay flags keep the added latency down; arnndn works on 10ms frames
+  nohup "$FFMPEG" -hide_banner -loglevel warning \
+    -fflags nobuffer -flags low_delay \
+    -f avfoundation -i ":$m" \
+    -af "arnndn=m=$model" -ar 48000 -ac 2 \
+    -f audiotoolbox -audio_device_index "$s" - \
+    >> "$LOGS/live.log" 2>&1 &
+  echo $! > "$pf"
+  sleep 2
+  if kill -0 "$(cat "$pf")" 2>/dev/null; then
+    c_ok "running (pid $(cat "$pf")) — select \"$SINK_NAME\" as your mic"
+    log "live start mic=$m sink=$s model=$RNN_MODEL"
+  else
+    rm -f "$pf"; die "failed to start — see $LOGS/live.log"
+  fi
+}
+
+cmd_live_stop() {
+  local pf; pf=$(live_pidfile)
+  [ -f "$pf" ] || { c_warn "not running"; return 0; }
+  kill -INT "$(cat "$pf")" 2>/dev/null
+  sleep 1
+  kill -0 "$(cat "$pf")" 2>/dev/null && kill -9 "$(cat "$pf")" 2>/dev/null
+  rm -f "$pf"
+  c_ok "live denoise stopped"
+  log "live stop"
+}
+
+cmd_live() {
+  case "${1:-status}" in
+    start)   shift; cmd_live_start "$@" ;;
+    stop)    shift; cmd_live_stop "$@" ;;
+    status)  shift; cmd_live_status "$@" ;;
+    install) shift; cmd_live_install "$@" ;;
+    *) die "usage: crispy live {start|stop|status|install}" ;;
+  esac
+}
+
 # --------------------------------------------------------------------- list
 cmd_list() {
   c_blue "Meetings in $MEETINGS"
@@ -278,6 +375,7 @@ case "${1:-doctor}" in
   notes)      shift; cmd_notes "$@" ;;
   run)        shift; cmd_run "$@" ;;
   list)       shift; cmd_list "$@" ;;
+  live)       shift; cmd_live "$@" ;;
   bench)      shift; exec "$(dirname "$0")/tools/bench.sh" "$@" ;;
   -h|--help)  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (try --help)" ;;
