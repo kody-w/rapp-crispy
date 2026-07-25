@@ -35,7 +35,7 @@ from agents.basic_agent import BasicAgent
 __manifest__ = {
     "schema": "rapp-agent/1.0",
     "name": "rapp_crispy",
-    "version": "1.1.0",
+    "version": "1.1.2",
     "description": (
         "Local-first meeting stack: record, RNNoise denoise, local whisper.cpp "
         "transcription and hook-driven notes. Nothing is uploaded."
@@ -532,11 +532,20 @@ class RappCrispyAgent(BasicAgent):
 
     # -------------------------------------------------------------- live status
     def _live_status(self):
+        """A loopback device is any device presenting BOTH an output and an input,
+        so audio written to it reappears as a capture source. Must match what the
+        CLI matches — an earlier version only looked for BlackHole and so reported
+        "not installed" on a machine that already had a usable loopback."""
         p = _run([_ffmpeg(), "-hide_banner", "-f", "lavfi", "-i", "anullsrc",
                   "-t", "0.05", "-f", "audiotoolbox", "-list_devices", "true", "-"],
                  timeout=60)
-        sinks = [l for l in (p.stderr or "").splitlines()
-                 if re.search(r"\[\d+\].*(blackhole|loopback)", l, re.I)]
+        pattern = os.environ.get(
+            "LOOPBACK_PATTERN", r"blackhole|loopback|soundflower|teams audio")
+        sinks = []
+        for line in (p.stderr or "").splitlines():
+            m = re.search(r"\[(\d+)\]\s+([^,]+)", line)
+            if m and re.search(pattern, m.group(2), re.I):
+                sinks.append({"index": int(m.group(1)), "name": m.group(2).strip()})
         pidfile = os.path.join(CRISPY_HOME, "live.pid")
         running = False
         if os.path.exists(pidfile):
@@ -545,21 +554,26 @@ class RappCrispyAgent(BasicAgent):
                 running = True
             except Exception:
                 running = False
-        return json.dumps({
+        out = {
             "live_denoise_running": running,
-            "loopback_sinks_found": [s.split("] ", 1)[-1].strip() for s in sinks],
+            "loopback_sinks_available": sinks,
             "how_it_works": ("mic -> RNNoise -> a loopback output device your "
                              "meeting app selects as its microphone"),
-            "requires": ("a loopback CoreAudio device — one that presents both an "
-                         "output and an input. A dedicated one (BlackHole) needs an "
-                         "administrator password to install, but a machine often "
-                         "already has one from a conferencing app, in which case no "
-                         "install is needed at all. `crispy live start` finds and "
-                         "uses whichever is present."),
             "engine_note": ("live denoise is always RNNoise; DeepFilterNet is "
                             "file-to-file with no streaming mode, so it is the "
                             "offline engine only"),
-        }, indent=2)
+        }
+        if sinks:
+            out["ready"] = True
+            out["start_with"] = "crispy live start"
+            out["then_select_as_microphone"] = sinks[0]["name"]
+        else:
+            out["ready"] = False
+            out["needs"] = ("a loopback CoreAudio device. A dedicated one "
+                            "(BlackHole) needs an administrator password to "
+                            "install; many machines already have one from a "
+                            "conferencing app, in which case nothing is needed.")
+        return json.dumps(out, indent=2)
 
     # ------------------------------------------------------------------ perform
     def perform(self, **kwargs):

@@ -2,7 +2,7 @@
   "schema": "rapp-application/1.0",
   "id": "rapp_crispy",
   "name": "RAPP Crispy",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "publisher": "@kody-w",
   "manifest_name": "@kody-w/rapp-crispy-singleton",
   "runtime": "twin",
