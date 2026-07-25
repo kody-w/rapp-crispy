@@ -224,6 +224,26 @@ capture device is real hardware). Recogniser output is **measured and printed,
 not asserted** — a suite that asserts on model output goes red for the wrong
 reason.
 
+## Running as a service
+
+`crispy` works fine ad hoc, but the ASR server and the hatched twin die on logout.
+`install.sh --service` installs two user-level launchd agents — no sudo, no system
+directories:
+
+| Agent | What |
+|---|---|
+| `com.rapp.whisper-server` | the local ASR on 127.0.0.1:8765 (shared with RAPP Voice) |
+| `com.rapp.crispy-twin` | the hatched rapplication on :7090 |
+
+```bash
+launchctl list | grep com.rapp.           # status
+launchctl bootout gui/$(id -u)/com.rapp.crispy-twin   # stop one
+rm ~/Library/LaunchAgents/com.rapp.*.plist            # uninstall entirely
+```
+
+The live virtual microphone is deliberately **not** a service — it holds the
+microphone open, so you start it when you want it.
+
 ## Keeping it from rotting
 
 Every real bug in this project came from **one fact living in two places**: the
