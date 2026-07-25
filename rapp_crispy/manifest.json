@@ -2,7 +2,7 @@
   "schema": "rapp-application/1.0",
   "id": "rapp_crispy",
   "name": "RAPP Crispy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "@kody-w",
   "manifest_name": "@kody-w/rapp-crispy-singleton",
   "runtime": "twin",
@@ -32,7 +32,10 @@
   },
   "produced_by": {
     "method": "single-file-agent + local-first ui",
-    "engines": ["ffmpeg arnndn (RNNoise)", "whisper.cpp server on 127.0.0.1"],
+    "engines": [
+      "ffmpeg arnndn (RNNoise)",
+      "whisper.cpp server on 127.0.0.1"
+    ],
     "source_files_collapsed": 1,
     "bundled_at": "2026-07-25T00:00:00Z"
   }

@@ -35,7 +35,7 @@ from agents.basic_agent import BasicAgent
 __manifest__ = {
     "schema": "rapp-agent/1.0",
     "name": "rapp_crispy",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": (
         "Local-first meeting stack: record, RNNoise denoise, local whisper.cpp "
         "transcription and hook-driven notes. Nothing is uploaded."
@@ -157,9 +157,23 @@ def _post_wav(path, prompt=None):
         return json.loads(r.read().decode("utf-8", "replace")).get("text", "")
 
 
+def _dict_path():
+    """Own dictionary first so the rapplication is self-contained; fall back to a
+    sibling RAPP Voice install so one vocabulary serves both. Explicit
+    CRISPY_DICT always wins."""
+    explicit = os.environ.get("CRISPY_DICT")
+    if explicit:
+        return explicit
+    for cand in (os.path.join(CRISPY_HOME, "dictionary.txt"),
+                 os.path.join(HOME, ".rappvoice", "dictionary.txt")):
+        if os.path.exists(cand):
+            return cand
+    return os.path.join(CRISPY_HOME, "dictionary.txt")
+
+
 def _dictionary():
     """Optional personal vocabulary: one term per line, or `heard => Term`."""
-    path = os.environ.get("CRISPY_DICT", os.path.join(CRISPY_HOME, "dictionary.txt"))
+    path = _dict_path()
     terms, subs = [], []
     if not os.path.exists(path):
         return terms, subs
@@ -276,6 +290,7 @@ class RappCrispyAgent(BasicAgent):
             f"  local ASR :{ASR_PORT}     {'up' if _asr_up() else 'DOWN'}",
             f"  denoise models      {len(models)} {models or '(run install.sh)'}",
             f"  notes hook          {'yes' if os.access(os.path.join(HOOKS, 'notes.sh'), os.X_OK) else 'no'}",
+            f"  dictionary          {_dict_path() if os.path.exists(_dict_path()) else 'none'}",
             f"  meetings            {MEETINGS}",
             "",
             "Nothing here uploads. Denoise is local ffmpeg, ASR is localhost, "
