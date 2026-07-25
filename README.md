@@ -76,28 +76,39 @@ Not claims — `crispy bench` reproduces this. Fixtures are synthesised speech
 mixed with noise at a known SNR; the score is how much quieter the non-speech
 gaps get, and how much of the talker survives.
 
-| Noise @ 0dB SNR | Noise floor reduction | Speech cost |
+Two engines ship. `crispy bench` reproduces all of this on your own hardware.
+
+| Noise @ 0dB SNR | RNNoise | **DeepFilterNet3** |
 |---|---|---|
-| white | **+26 to +28 dB** | −3.9 dB |
-| pink | +15 to +16 dB | −3.9 dB |
-| **babble (other voices)** | **+3.2 dB** | −5 to −13 dB |
+| white | +28.1 dB | **+42.5 dB** |
+| pink | +15.8 dB | **+36.6 dB** |
+| **babble (other voices)** | +4.2 dB | +4.5 dB |
+| real-time factor | 0.014 | 0.048 |
 
-**RTF 0.014** — 70× faster than real time on an M4, so compute is not the
-constraint for live use.
+DFN3 is the default for recorded audio — 14 dB better on steady noise, still 20x
+real time. **Live denoise is always RNNoise**, because `deep-filter` is
+file-to-file with no streaming mode.
 
-### The honest gap
+### The honest gap: background voices
 
-RNNoise is built to separate *voice from non-voice*. Babble is voice, so it
-barely moves — and what little it removes costs more speech than noise. The
-incumbent's "Background Voice Cancellation" is a different model class
-(documented at 32kHz, no voice enrollment) and it is genuinely better at this.
+Neither engine cancels background *voices*, and DFN3 does not rescue it. Measured
+as word-error-rate on the target talker in babble at 0 dB SNR:
 
-If you need babble suppression, the path is DeepFilterNet3, which needs a Rust
-toolchain to build (`deepfilterlib` has no wheel for Python 3.14). That is not
-wired up here. **Do not demo this against a coffee-shop background and expect to
-win.** Stationary noise — fans, traffic, keyboards, HVAC — it handles well.
+| | WER |
+|---|---|
+| untouched | 19% |
+| RNNoise | 19% |
+| DFN3 | 31% |
+| DFN3 + `--pf` post-filter | 50% |
 
----
+DFN3's large dB number on babble is **over-attenuation eating the talker** — which
+is why the post-filter is not shipped. Both engines separate voice from non-voice;
+babble is voice. Cancelling it needs target-speaker extraction — deciding which
+voice is yours — a different model class, not available as a drop-in local binary.
+Commercial "background voice cancellation" is genuinely better at this.
+
+**Do not demo this against a coffee shop.** Fans, traffic, keyboards, HVAC: handled
+very well.
 
 ## Personal dictionary
 
@@ -140,19 +151,39 @@ worth keeping, since ASR errors otherwise become confident fiction.
 
 ---
 
-## What is NOT built (and why)
+## Live virtual microphone — working
 
-**Live virtual microphone** — denoising *inside* Zoom/Teams/Meet needs a
-CoreAudio driver presenting a virtual input device, so apps can select it. The
-incumbent ships `KrispAudio.driver` for exactly this. Compute is not the blocker
-(RTF 0.014); the blocker is that installing an audio driver is a consequential,
-sudo-level change to your system's audio routing. The route is BlackHole as the
-loopback transport, mic → `arnndn` → BlackHole → app.
+`crispy live start` puts a denoised microphone in front of Zoom/Teams/Meet: select
+the loopback device it names as your mic.
 
-**Far-end audio capture** — recording the *other* people needs the same loopback
-device. `screencapture -G` captures an *input* device, not system output, so
-today Crispy records your side well and the room's side only through your mic.
-This is the single biggest functional gap versus a cloud meeting assistant.
+```
+crispy live status     # what it found
+crispy live start      # mic -> RNNoise -> loopback
+crispy live stop
+```
+
+It needs a *loopback* CoreAudio device — one presenting both an output and an
+input. A dedicated one (BlackHole) needs an administrator password, **but most
+machines already have a loopback installed by a conferencing app**, and `crispy
+live` uses whichever is present. On this machine that meant nothing to install.
+
+Two implementation notes, both learned the hard way:
+
+- **Two ffmpeg processes, not one.** Piping an avfoundation capture straight into
+  the audiotoolbox output device gives audio at a plausible level that is not
+  intelligible: `mic -> file` transcribes perfectly, the same chain `mic -> device`
+  yields `[BLANK_AUDIO]`. A file-like input to audiotoolbox works, so a wav pipe
+  between two processes decouples the capture clock from the playback clock.
+- **No `-fflags nobuffer` / `-flags low_delay`.** Measured against this exact
+  chain they cost 12 dB at the far end (-26.9 dB vs -14.2 dB captured) by dropping
+  samples, which reads as silence.
+
+## Still not built
+
+**Far-end audio capture** — recording the *other* people needs a loopback wired the
+other way (system output into a capture source). Without it your side is captured
+well and the room only through your microphone. This is the remaining functional
+gap versus a cloud meeting assistant.
 
 **Accent conversion** — no local model. Not attempted.
 
@@ -167,7 +198,9 @@ Environment variables, all optional:
 | `CRISPY_HOME` | `~/.rappcrispy` | state directory |
 | `CRISPY_MIC` | auto | avfoundation input index; auto-pick prefers real hardware over virtual devices |
 | `CRISPY_DICT` | `~/.rappvoice/dictionary.txt` | personal dictionary |
-| `RNN_MODEL` | `cb` | one of `bd cb sh mp lq` — see `crispy bench` |
+| `ENGINE` | `auto` | `dfn` / `rnnoise` / `auto` (DFN3 when present) |
+| `RNN_MODEL` | `cb` | RNNoise model: `bd cb sh mp lq` |
+| `SINK_NAME` | auto | pin `crispy live`'s loopback device by name |
 | `ASR_PORT` | `8765` | local whisper-server port |
 | `CHUNK_SECONDS` | `300` | transcription chunk size |
 

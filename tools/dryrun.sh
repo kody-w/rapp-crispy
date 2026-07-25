@@ -92,6 +92,34 @@ info "babble @ 0dB SNR: $bred dB — KNOWN LIMITATION, RNNoise targets non-voice
 python3 -c "import sys; sys.exit(0 if $bred >= 0 else 1)" \
   && ok "babble does not make things worse ($bred dB)" || bad "babble path degraded the signal ($bred dB)"
 
+head_ "1b. DeepFilterNet3 (offline engine)"
+DF="$HOME/.rappcrispy/bin/deep-filter"
+if [ -x "$DF" ]; then
+  ok "deep-filter present"
+  eng=$("$CRISPY" denoise "$W/noisy_white.wav" "$W/dfn_white.wav" 2>/dev/null | grep -o 'engine=[a-z]*' | cut -d= -f2)
+  [ "$eng" = dfn ] && ok "auto-selects DFN3 when present" || bad "selected engine=$eng"
+  gin=$(vol "$W/noisy_white.wav" 0 1.4); gout=$(vol "$W/dfn_white.wav" 0 1.4)
+  red=$(python3 -c "print(f'{$gin - ($gout):.1f}')")
+  info "DFN3 white @0dB: $red dB (RNNoise got ~28)"
+  python3 -c "import sys; sys.exit(0 if $red >= 35 else 1)" \
+    && ok "DFN3 beats RNNoise on steady noise ($red dB >= 35)" || bad "DFN3 only $red dB"
+  eng=$(ENGINE=rnnoise "$CRISPY" denoise "$W/noisy_white.wav" "$W/forced.wav" 2>/dev/null | grep -o 'engine=[a-z]*' | cut -d= -f2)
+  [ "$eng" = rnnoise ] && ok "ENGINE=rnnoise forces the old engine" || bad "override gave engine=$eng"
+else
+  info "SKIP: deep-filter not installed (install.sh fetches it)"
+fi
+
+head_ "1c. Babble is NOT solved by either engine (guards against overclaiming)"
+# Asserting the LIMIT keeps a future change from silently claiming babble works.
+mix "$FIX/n_babble.wav" 0 "$W/nb.wav"
+gin=$(vol "$W/nb.wav" 0 1.4)
+"$CRISPY" denoise "$W/nb.wav" "$W/nb_out.wav" >/dev/null 2>&1
+red=$(python3 -c "print(f'{$gin - ($(vol "$W/nb_out.wav" 0 1.4)):.1f}')")
+info "babble @0dB: $red dB — target-speaker extraction is what would fix this"
+python3 -c "import sys; sys.exit(0 if $red < 15 else 1)" \
+  && ok "babble still unsolved ($red dB) — README claim matches reality" \
+  || bad "babble now $red dB: the README understates the product, update it"
+
 head_ "2. Real-time capability"
 rtf=$("$CRISPY" denoise "$W/noisy_white.wav" "$W/rtf.wav" 2>/dev/null | grep -o 'RTF=[0-9.]*' | cut -d= -f2)
 info "RTF $rtf (processed seconds per second of audio)"
@@ -147,6 +175,26 @@ else
 fi
 
 # ------------------------------------------------------------ meeting layout
+head_ "5c. Live virtual microphone"
+lv=$("$CRISPY" live status 2>&1)
+case "$lv" in
+  *"loopback sink available"*) ok "found a loopback device without installing anything" ;;
+  *"no loopback device"*) info "SKIP: no loopback device on this machine" ;;
+  *) bad "live status unexpected" ;;
+esac
+case "$("$CRISPY" live install 2>&1)" in
+  *"nothing to install"*)        ok "live install reports nothing to do" ;;
+  *"administrator password"*)    ok "live install explains the driver route without running it" ;;
+  *) bad "live install output unexpected" ;;
+esac
+# the chain must be two processes joined by a pipe — one process is the bug
+grep -q 'f wav -c:a pcm_s16le - \\' "$CRISPY" && ok "live chain is a two-process pipe" \
+  || bad "live chain is not piped — single-process yields unintelligible audio"
+# match the FLAG, not the comment that explains why it was removed
+grep -vE '^\s*#' "$CRISPY" | grep -q -- '-flags low_delay' \
+  && bad "low_delay flag is back in the chain (cost 12dB)" \
+  || ok "no low_delay flag in the live chain"
+
 head_ "6. Meeting on disk (ownership)"
 MEET="$HOME/.rappcrispy/meetings"
 latest=$(ls -td "$MEET"/*/ 2>/dev/null | head -1)

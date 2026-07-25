@@ -30,6 +30,20 @@ for m in bd:beguiling-drafter-2018-08-30 cb:conjoined-burgers-2018-08-28 sh:somn
        && ok "$n.rnnn $(stat -f%z "$CH/models/$n.rnnn") bytes" || warn "failed to fetch $n.rnnn"; fi
 done
 
+say "DeepFilterNet3 (offline denoise engine)"
+DF="$CH/bin/deep-filter"
+mkdir -p "$CH/bin"
+if [ -x "$DF" ]; then ok "deep-filter present"
+else
+  ARCH=$(uname -m); case "$ARCH" in arm64) T=aarch64-apple-darwin ;; *) T=x86_64-apple-darwin ;; esac
+  if curl -sL --fail -o "$DF" "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-$T"; then
+    chmod +x "$DF"; xattr -d com.apple.quarantine "$DF" 2>/dev/null || true
+    ok "deep-filter installed ($(du -h "$DF" | cut -f1), $T)"
+  else
+    warn "could not fetch deep-filter — RNNoise still works, ~14dB weaker on steady noise"
+  fi
+fi
+
 say "Notes hook"
 if [ -f "$CH/hooks/notes.sh" ]; then ok "hooks/notes.sh kept (yours)"
 else cp "$SRC/hooks-notes.sh" "$CH/hooks/notes.sh"; ok "hooks/notes.sh installed"; fi

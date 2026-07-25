@@ -21,13 +21,28 @@ LOGS="$CRISPY_HOME/logs"
 FFMPEG="${FFMPEG:-/opt/homebrew/bin/ffmpeg}"
 ASR_PORT="${ASR_PORT:-8765}"
 
-# Denoise model. Measured on fixtures: bd/cb are the strongest on stationary
-# noise (+28dB). See `crispy bench` — RNNoise is weak on babble by design.
+# Denoise engine. Measured on fixtures at 0dB SNR (crispy bench reproduces it):
+#                    white      pink     babble
+#   rnnoise         +28.1 dB  +15.8 dB   +4.2 dB   RTF 0.014
+#   dfn  (DFN3)     +42.5 dB  +36.6 dB   +4.5 dB   RTF 0.048
+# DFN3 wins decisively on stationary noise, so it is the default when present.
+# NEITHER engine cancels background VOICES — see the README. DFN3's --pf
+# post-filter was measured and rejected: it raised babble word-error rate to 50%.
+ENGINE="${ENGINE:-auto}"          # auto | dfn | rnnoise
+DEEP_FILTER="${DEEP_FILTER:-$CRISPY_HOME/bin/deep-filter}"
 RNN_MODEL="${RNN_MODEL:-cb}"
 # Transcribe in chunks so a long meeting streams progress instead of one huge POST.
 CHUNK_SECONDS="${CHUNK_SECONDS:-300}"
 
 mkdir -p "$MODELS" "$MEETINGS" "$HOOKS" "$LOGS"
+
+resolve_engine() {
+  case "$ENGINE" in
+    dfn)     [ -x "$DEEP_FILTER" ] && echo dfn || echo rnnoise ;;
+    rnnoise) echo rnnoise ;;
+    *)       [ -x "$DEEP_FILTER" ] && echo dfn || echo rnnoise ;;
+  esac
+}
 
 c_blue()  { printf '\033[1;36m%s\033[0m\n' "$*"; }
 c_ok()    { printf '    \033[32m✓\033[0m %s\n' "$*"; }
@@ -78,6 +93,9 @@ cmd_doctor() {
   code=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://127.0.0.1:$ASR_PORT/" 2>/dev/null)
   [ "${code:-000}" != "000" ] && c_ok "local ASR on :$ASR_PORT (HTTP $code)" \
     || c_warn "no ASR on :$ASR_PORT — start whisper-server (see README)"
+  local eng; eng=$(resolve_engine)
+  if [ "$eng" = dfn ]; then c_ok "denoise engine: DeepFilterNet3 offline / RNNoise live ($DEEP_FILTER)"
+  else c_warn "denoise engine: RNNoise (DFN3 absent — install.sh fetches it; +14dB better on steady noise)"; fi
   ls "$MODELS"/*.rnnn >/dev/null 2>&1 \
     && c_ok "denoise models: $(ls "$MODELS"/*.rnnn | wc -l | tr -d ' ')" \
     || c_warn "no .rnnn models in $MODELS — run install.sh"
@@ -148,17 +166,29 @@ cmd_record() {
 cmd_denoise() {
   local in="${1:?usage: crispy denoise <in.wav> [out.wav]}"
   local out="${2:-${in%.*}.denoised.wav}"
-  local model="$MODELS/$RNN_MODEL.rnnn"
-  [ -f "$model" ] || die "model missing: $model (run install.sh)"
+  local eng; eng=$(resolve_engine)
   local t0 t1 dur
   t0=$(python3 -c 'import time;print(time.time())')
-  "$FFMPEG" -hide_banner -loglevel error -i "$in" \
-    -af "arnndn=m=$model" -ar 48000 -ac 1 -c:a pcm_s16le -y "$out" || die "denoise failed"
+  if [ "$eng" = dfn ]; then
+    local tmp; tmp=$(mktemp -d)
+    "$DEEP_FILTER" -o "$tmp" "$in" >/dev/null 2>&1 || { rm -rf "$tmp"; die "deep-filter failed"; }
+    local produced; produced=$(ls "$tmp"/*.wav 2>/dev/null | head -1)
+    [ -n "$produced" ] || { rm -rf "$tmp"; die "deep-filter produced no output"; }
+    # DFN3 emits 48k mono; normalise so downstream stages see one shape
+    "$FFMPEG" -hide_banner -loglevel error -i "$produced" -ar 48000 -ac 1 \
+      -c:a pcm_s16le -y "$out" || { rm -rf "$tmp"; die "normalise failed"; }
+    rm -rf "$tmp"
+  else
+    local model="$MODELS/$RNN_MODEL.rnnn"
+    [ -f "$model" ] || die "model missing: $model (run install.sh)"
+    "$FFMPEG" -hide_banner -loglevel error -i "$in" \
+      -af "arnndn=m=$model" -ar 48000 -ac 1 -c:a pcm_s16le -y "$out" || die "denoise failed"
+  fi
   t1=$(python3 -c 'import time;print(time.time())')
   dur=$(python3 -c "import wave;w=wave.open('$in');print(w.getnframes()/w.getframerate())")
   local rtf; rtf=$(python3 -c "print(f'{($t1-$t0)/$dur:.4f}')")
-  c_ok "denoised -> $out  (model=$RNN_MODEL, RTF=$rtf)"
-  log "denoise in=$in model=$RNN_MODEL rtf=$rtf"
+  c_ok "denoised -> $out  (engine=$eng, RTF=$rtf)"
+  log "denoise in=$in engine=$eng rtf=$rtf"
   echo "$out"
 }
 
@@ -258,12 +288,29 @@ cmd_run() {
 # Live virtual microphone: real mic -> RNNoise -> a loopback output device that
 # conferencing apps can select as their INPUT. This is the same architecture the
 # commercial tools use (they ship their own CoreAudio driver); we borrow one.
-SINK_NAME="${SINK_NAME:-BlackHole}"
+# A loopback device is any device that presents BOTH an output and an input, so
+# audio written to it reappears as a capture source. BlackHole is the usual
+# dedicated one, but a machine often already has one installed by a conferencing
+# app — verified working on this machine, which is why no driver install is
+# required. SINK_NAME pins a specific device by name.
+SINK_NAME="${SINK_NAME:-}"
+LOOPBACK_PATTERN="${LOOPBACK_PATTERN:-blackhole|loopback|soundflower|teams audio}"
 
-# audiotoolbox (output) and avfoundation (input) enumerate separately.
 sink_index() {
+  local outs; outs=$("$FFMPEG" -hide_banner -f lavfi -i anullsrc -t 0.05 \
+    -f audiotoolbox -list_devices true - 2>&1 | grep -oE '\[[0-9]+\] +[^,]+')
+  if [ -n "$SINK_NAME" ]; then
+    echo "$outs" | grep -iE "\[[0-9]+\] +.*$SINK_NAME" | head -1 | sed -E 's/.*\[([0-9]+)\].*/\1/'
+    return
+  fi
+  # prefer a dedicated loopback over one borrowed from another app
+  echo "$outs" | grep -iE '\[[0-9]+\] +.*(blackhole|soundflower)' | head -1 | sed -E 's/.*\[([0-9]+)\].*/\1/' && return
+  echo "$outs" | grep -iE "\[[0-9]+\] +.*($LOOPBACK_PATTERN)" | head -1 | sed -E 's/.*\[([0-9]+)\].*/\1/'
+}
+
+sink_name() {
   "$FFMPEG" -hide_banner -f lavfi -i anullsrc -t 0.05 -f audiotoolbox -list_devices true - 2>&1 \
-    | grep -iE "\[[0-9]+\].*$SINK_NAME" | head -1 | sed -E 's/.*\[([0-9]+)\].*/\1/'
+    | grep -E "\[$1\]" | sed -E 's/.*\[[0-9]+\] +//;s/,.*//' | head -1
 }
 
 live_pidfile() { echo "$CRISPY_HOME/live.pid"; }
@@ -271,20 +318,21 @@ live_pidfile() { echo "$CRISPY_HOME/live.pid"; }
 cmd_live_status() {
   local pf; pf=$(live_pidfile)
   if [ -f "$pf" ] && kill -0 "$(cat "$pf")" 2>/dev/null; then
-    c_ok "live denoise RUNNING (pid $(cat "$pf")) -> $SINK_NAME"
-    c_ok "select \"$SINK_NAME\" as the microphone in your meeting app"
+    local s; s=$(sink_index)
+    c_ok "live denoise RUNNING (pid $(cat "$pf")) -> $(sink_name "$s")"
+    c_ok "select \"$(sink_name "$s")\" as the microphone in your meeting app"
     return 0
   fi
   c_warn "live denoise not running"
   local s; s=$(sink_index)
-  [ -n "$s" ] && c_ok "sink device present: $SINK_NAME at output index $s" \
-              || c_warn "no \"$SINK_NAME\" device — run: crispy live install"
+  [ -n "$s" ] && c_ok "loopback sink available: $(sink_name "$s") (output index $s)" \
+              || c_warn "no loopback device found — crispy live install explains the options"
   return 1
 }
 
 cmd_live_install() {
   local s; s=$(sink_index)
-  if [ -n "$s" ]; then c_ok "$SINK_NAME already installed (output index $s)"; return 0; fi
+  if [ -n "$s" ]; then c_ok "loopback already available: $(sink_name "$s") (output index $s) — nothing to install"; return 0; fi
   cat <<'EOS'
 The live virtual microphone needs a loopback audio device. Installing a
 CoreAudio driver modifies system audio routing and requires your password, so
@@ -303,7 +351,7 @@ EOS
 cmd_live_start() {
   local s m pf
   s=$(sink_index)
-  [ -n "$s" ] || { cmd_live_install; die "no $SINK_NAME sink device"; }
+  [ -n "$s" ] || { cmd_live_install; die "no loopback sink device available"; }
   m=$(pick_mic)
   pf=$(live_pidfile)
   if [ -f "$pf" ] && kill -0 "$(cat "$pf")" 2>/dev/null; then
@@ -311,19 +359,27 @@ cmd_live_start() {
   fi
   local model="$MODELS/$RNN_MODEL.rnnn"
   [ -f "$model" ] || die "model missing: $model"
-  c_blue "Live denoise: [$m] $(mic_name "$m")  ->  $SINK_NAME (out $s)"
-  # low-delay flags keep the added latency down; arnndn works on 10ms frames
-  nohup "$FFMPEG" -hide_banner -loglevel warning \
-    -fflags nobuffer -flags low_delay \
-    -f avfoundation -i ":$m" \
-    -af "arnndn=m=$model" -ar 48000 -ac 2 \
-    -f audiotoolbox -audio_device_index "$s" - \
+  # LIVE IS ALWAYS RNNoise. DeepFilterNet's deep-filter is file-to-file with no
+  # streaming mode, so it cannot sit in a realtime chain — it is the offline
+  # engine only.
+  c_blue "Live denoise: [$m] $(mic_name "$m")  --rnnoise-->  $(sink_name "$s") (out $s)"
+  # TWO PROCESSES ON PURPOSE. Piping an avfoundation capture straight into the
+  # audiotoolbox output device in ONE ffmpeg yields audio at a plausible level
+  # that is not intelligible — measured: mic->file transcribes perfectly, the
+  # same chain mic->device gives [BLANK_AUDIO], and -fflags nobuffer /
+  # -flags low_delay / aresample=async all fail to fix it. A file-like input to
+  # audiotoolbox works, so the wav pipe decouples the capture clock from the
+  # playback clock. Verified end to end: the virtual mic transcribes speech.
+  nohup sh -c "'$FFMPEG' -hide_banner -loglevel error -f avfoundation -i ':$m' \
+      -af 'arnndn=m=$model' -ar 48000 -ac 2 -f wav -c:a pcm_s16le - \
+    | '$FFMPEG' -hide_banner -loglevel error -f wav -i pipe:0 \
+      -f audiotoolbox -audio_device_index $s -" \
     >> "$LOGS/live.log" 2>&1 &
   echo $! > "$pf"
-  sleep 2
+  sleep 3
   if kill -0 "$(cat "$pf")" 2>/dev/null; then
-    c_ok "running (pid $(cat "$pf")) — select \"$SINK_NAME\" as your mic"
-    log "live start mic=$m sink=$s model=$RNN_MODEL"
+    c_ok "running (pid $(cat "$pf")) — select \"$(sink_name "$s")\" as your mic"
+    log "live start mic=$m sink=$s engine=rnnoise"
   else
     rm -f "$pf"; die "failed to start — see $LOGS/live.log"
   fi
@@ -332,9 +388,14 @@ cmd_live_start() {
 cmd_live_stop() {
   local pf; pf=$(live_pidfile)
   [ -f "$pf" ] || { c_warn "not running"; return 0; }
-  kill -INT "$(cat "$pf")" 2>/dev/null
+  local sh_pid; sh_pid=$(cat "$pf")
+  # the pipeline is a shell with two ffmpeg children; kill the children first so
+  # neither is left holding the microphone or the loopback device
+  pkill -P "$sh_pid" 2>/dev/null
+  kill -INT "$sh_pid" 2>/dev/null
   sleep 1
-  kill -0 "$(cat "$pf")" 2>/dev/null && kill -9 "$(cat "$pf")" 2>/dev/null
+  kill -0 "$sh_pid" 2>/dev/null && kill -9 "$sh_pid" 2>/dev/null
+  pkill -f "audio_device_index $(sink_index)" 2>/dev/null
   rm -f "$pf"
   c_ok "live denoise stopped"
   log "live stop"

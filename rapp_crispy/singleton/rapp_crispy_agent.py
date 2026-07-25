@@ -35,7 +35,7 @@ from agents.basic_agent import BasicAgent
 __manifest__ = {
     "schema": "rapp-agent/1.0",
     "name": "rapp_crispy",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "description": (
         "Local-first meeting stack: record, RNNoise denoise, local whisper.cpp "
         "transcription and hook-driven notes. Nothing is uploaded."
@@ -54,6 +54,13 @@ HOOKS = os.path.join(CRISPY_HOME, "hooks")
 LOGS = os.path.join(CRISPY_HOME, "logs")
 ASR_PORT = int(os.environ.get("ASR_PORT", "8765"))
 RNN_MODEL = os.environ.get("RNN_MODEL", "cb")
+# Offline denoise engine. Measured at 0dB SNR (action="bench" reproduces it):
+#   rnnoise  white +28.1 dB  pink +15.8 dB  babble +4.2 dB  RTF 0.014
+#   dfn      white +42.5 dB  pink +36.6 dB  babble +4.5 dB  RTF 0.048
+# DFN3 is the default when present. It is OFFLINE ONLY — deep-filter is
+# file-to-file with no streaming mode, so live denoise is always RNNoise.
+ENGINE = os.environ.get("ENGINE", "auto")
+DEEP_FILTER = os.environ.get("DEEP_FILTER", os.path.join(CRISPY_HOME, "bin", "deep-filter"))
 CHUNK_SECONDS = int(os.environ.get("CHUNK_SECONDS", "300"))
 
 # Auto-pick prefers a REAL hardware input. Capturing through some other
@@ -274,6 +281,11 @@ class RappCrispyAgent(BasicAgent):
     def _model_path(self):
         return os.path.join(MODELS, f"{RNN_MODEL}.rnnn")
 
+    def _engine(self):
+        if ENGINE == "rnnoise":
+            return "rnnoise"
+        return "dfn" if os.access(DEEP_FILTER, os.X_OK) else "rnnoise"
+
     # ------------------------------------------------------------------- doctor
     def _doctor(self):
         ff = _ffmpeg()
@@ -288,6 +300,7 @@ class RappCrispyAgent(BasicAgent):
             f"  arnndn (RNNoise)    {'yes' if 'arnndn' in filters else 'MISSING'}",
             f"  capture device      [{idx}] {mic}",
             f"  local ASR :{ASR_PORT}     {'up' if _asr_up() else 'DOWN'}",
+            f"  denoise engine      {'DeepFilterNet3 (offline) + RNNoise (live)' if self._engine() == 'dfn' else 'RNNoise only — DFN3 absent, ~14dB weaker on steady noise'}",
             f"  denoise models      {len(models)} {models or '(run install.sh)'}",
             f"  notes hook          {'yes' if os.access(os.path.join(HOOKS, 'notes.sh'), os.X_OK) else 'no'}",
             f"  dictionary          {_dict_path() if os.path.exists(_dict_path()) else 'none'}",
@@ -335,20 +348,38 @@ class RappCrispyAgent(BasicAgent):
 
     # ------------------------------------------------------------------ denoise
     def _denoise(self, src, dst=None):
-        model = self._model_path()
-        if not os.path.exists(model):
-            return None, f"denoise model missing: {model}"
         dst = dst or (os.path.splitext(src)[0] + ".denoised.wav")
+        eng = self._engine()
         t0 = time.time()
-        p = _run([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-i", src,
-                  "-af", f"arnndn=m={model}", "-ar", "48000", "-ac", "1",
-                  "-c:a", "pcm_s16le", "-y", dst])
-        if p.returncode != 0 or not os.path.exists(dst):
-            return None, f"denoise failed: {(p.stderr or '')[:400]}"
+        if eng == "dfn":
+            work = os.path.join(CRISPY_HOME, ".dfn")
+            shutil.rmtree(work, ignore_errors=True)
+            os.makedirs(work, exist_ok=True)
+            p = _run([DEEP_FILTER, "-o", work, src])
+            produced = sorted(f for f in os.listdir(work) if f.endswith(".wav"))
+            if p.returncode != 0 or not produced:
+                shutil.rmtree(work, ignore_errors=True)
+                return None, f"deep-filter failed: {(p.stderr or '')[:300]}"
+            # normalise so every downstream stage sees one shape
+            n = _run([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-i",
+                      os.path.join(work, produced[0]), "-ar", "48000", "-ac", "1",
+                      "-c:a", "pcm_s16le", "-y", dst])
+            shutil.rmtree(work, ignore_errors=True)
+            if n.returncode != 0 or not os.path.exists(dst):
+                return None, f"normalise failed: {(n.stderr or '')[:300]}"
+        else:
+            model = self._model_path()
+            if not os.path.exists(model):
+                return None, f"denoise model missing: {model}"
+            p = _run([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-i", src,
+                      "-af", f"arnndn=m={model}", "-ar", "48000", "-ac", "1",
+                      "-c:a", "pcm_s16le", "-y", dst])
+            if p.returncode != 0 or not os.path.exists(dst):
+                return None, f"denoise failed: {(p.stderr or '')[:400]}"
         dur = _wav_seconds(src) or 1.0
         rtf = round((time.time() - t0) / dur, 4)
-        self._log(f"denoise src={src} model={RNN_MODEL} rtf={rtf}")
-        return dst, f"denoised -> {dst} (model={RNN_MODEL}, RTF={rtf})"
+        self._log(f"denoise src={src} engine={eng} rtf={rtf}")
+        return dst, f"denoised -> {dst} (engine={eng}, RTF={rtf})"
 
     # --------------------------------------------------------------- transcribe
     def _transcribe(self, wav):
@@ -519,10 +550,15 @@ class RappCrispyAgent(BasicAgent):
             "loopback_sinks_found": [s.split("] ", 1)[-1].strip() for s in sinks],
             "how_it_works": ("mic -> RNNoise -> a loopback output device your "
                              "meeting app selects as its microphone"),
-            "requires": ("a loopback CoreAudio device (e.g. BlackHole). Installing "
-                         "an audio driver changes system audio routing and needs "
-                         "an administrator password, so it is never automated. "
-                         "Install it yourself, then run `crispy live start`."),
+            "requires": ("a loopback CoreAudio device — one that presents both an "
+                         "output and an input. A dedicated one (BlackHole) needs an "
+                         "administrator password to install, but a machine often "
+                         "already has one from a conferencing app, in which case no "
+                         "install is needed at all. `crispy live start` finds and "
+                         "uses whichever is present."),
+            "engine_note": ("live denoise is always RNNoise; DeepFilterNet is "
+                            "file-to-file with no streaming mode, so it is the "
+                            "offline engine only"),
         }, indent=2)
 
     # ------------------------------------------------------------------ perform
