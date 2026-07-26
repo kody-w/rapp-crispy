@@ -1,4 +1,15 @@
 #!/bin/bash
+# Resolve THIS script through any symlink before locating siblings. install.sh
+# links `crispy` into ~/.local/bin, so $(dirname "$0") pointed at ~/.local/bin and
+# tools/dictfix.py silently vanished — the dictionary post-pass then did nothing
+# and transcripts kept the wrong spelling with no error. Same defect class that
+# made `shot redact` report a false all-clear.
+_SELF="${BASH_SOURCE[0]}"
+while [ -L "$_SELF" ]; do
+  _t=$(readlink "$_SELF")
+  case "$_t" in /*) _SELF="$_t" ;; *) _SELF="$(dirname "$_SELF")/$_t" ;; esac
+done
+CRISPY_DIR="$(cd "$(dirname "$_SELF")" && pwd -P)"
 # RAPP Crispy — a local-first meeting stack. Record, denoise, transcribe and
 # summarise a meeting entirely on this machine. Nothing is uploaded, ever.
 #
@@ -212,7 +223,7 @@ dictionary_prompt() {
 # here, honouring `heard => Term` rewrite lines if the dictionary has any.
 apply_dictionary() {
   local dict="${CRISPY_DICT:-$HOME/.rappvoice/dictionary.txt}"
-  local fixer="$(dirname "$0")/tools/dictfix.py"
+  local fixer="$CRISPY_DIR/tools/dictfix.py"
   if [ -f "$dict" ] && [ -f "$fixer" ]; then
     python3 "$fixer" "$dict"
   else
@@ -455,7 +466,7 @@ case "${1:-doctor}" in
   run)        shift; cmd_run "$@" ;;
   list)       shift; cmd_list "$@" ;;
   live)       shift; cmd_live "$@" ;;
-  bench)      shift; exec "$(dirname "$0")/tools/bench.sh" "$@" ;;
+  bench)      shift; exec "$CRISPY_DIR/tools/bench.sh" "$@" ;;
   -h|--help)  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (try --help)" ;;
 esac
