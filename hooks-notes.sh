@@ -14,7 +14,10 @@ brewbin() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
     [ -x "$p" ] && { echo "$p"; return; }; done
   command -v "$1" 2>/dev/null || echo "/opt/homebrew/bin/$1"; }
 
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+# APPEND rather than replace. Hard-resetting PATH silently overrode a user who
+# had put a local-model shim named `claude` earlier on their PATH — precisely
+# the person trying to keep the transcript off the network.
+export PATH="$PATH:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 transcript="$(cat "$1")"
 [ -n "$transcript" ] || exit 1

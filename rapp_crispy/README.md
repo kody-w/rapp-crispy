@@ -5,7 +5,10 @@ the background noise, transcribe it, and get notes — **entirely on the machine
 brainstem runs on.**
 
 Recordings, transcripts and notes are plain files under
-`~/.rappcrispy/meetings/<timestamp>/`. Nothing is uploaded.
+`~/.rappcrispy/meetings/<timestamp>/`. Recording, denoising and transcription
+never leave this machine. Note-writing goes through `~/.rappcrispy/hooks/notes.sh`,
+and the hook shipped as the default calls `claude -p` — so the transcript is sent
+to Anthropic unless you repoint that hook at a local model.
 
 ```
 mic (real hardware)  ──►  RNNoise denoise   ffmpeg arnndn, on-device

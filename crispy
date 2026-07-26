@@ -11,13 +11,18 @@ while [ -L "$_SELF" ]; do
 done
 CRISPY_DIR="$(cd "$(dirname "$_SELF")" && pwd -P)"
 # RAPP Crispy — a local-first meeting stack. Record, denoise, transcribe and
-# summarise a meeting entirely on this machine. Nothing is uploaded, ever.
+# summarise a meeting on this machine. Capture, denoise and transcription are
+# fully local. Note-writing runs through a hook you own; the DEFAULT hook calls
+# `claude -p`, which sends that transcript to Anthropic. Repoint it at a local
+# model, or delete it, for an entirely offline pipeline.
 #
 #   crispy record   [--screen] [--seconds N] [--name X]   capture a meeting
 #   crispy denoise  <in.wav> [out.wav]                    RNNoise denoise
 #   crispy transcribe <wav>                               local ASR
 #   crispy notes    <meeting-dir>                          summary + action items
-#   crispy run      [--screen] [--seconds N] [--name X]   the whole loop
+#   crispy run      [--screen] [--seconds N] [--name X] [--no-notes]  the whole loop
+#                   --no-notes skips the summarisation hook entirely, so nothing
+#                   can leave this machine even if the hook is the default one.
 #   crispy bench                                           measured denoise quality
 #   crispy live     {start|stop|status|install}            live virtual microphone
 #   crispy list                                            meetings on disk
@@ -127,6 +132,9 @@ cmd_record() {
       --screen)  screen=1; shift ;;
       --seconds) seconds="$2"; shift 2 ;;
       --name)    name="$2"; shift 2 ;;
+      # The escape hatch for a meeting you may not send anywhere. Exported so
+      # cmd_notes sees it whether it is reached via `run` or called directly.
+      --no-notes) export CRISPY_NO_NOTES=1; shift ;;
       *) die "unknown flag: $1" ;;
     esac
   done
@@ -265,7 +273,8 @@ except Exception: pass'
 
 # --------------------------------------------------------------------- notes
 cmd_notes() {
-  local dir="${1:?usage: crispy notes <meeting-dir>}"
+  if [ "${1:-}" = "--no-notes" ]; then export CRISPY_NO_NOTES=1; shift; fi
+  local dir="${1:?usage: crispy notes [--no-notes] <meeting-dir>}"
   [ -d "$dir" ] || die "no such meeting: $dir"
   local src="$dir/mic.denoised.wav"
   [ -f "$src" ] || src="$dir/mic.wav"
@@ -279,8 +288,16 @@ cmd_notes() {
   c_ok "transcript.txt — $words words"
   [ "$words" -lt 3 ] && { c_warn "not enough speech to summarise"; return 0; }
 
-  if [ -x "$HOOKS/notes.sh" ]; then
-    c_blue "Summarising (local hook)"
+  if [ "${CRISPY_NO_NOTES:-0}" = 1 ]; then
+    c_ok "notes skipped (--no-notes) — the transcript stays on this machine"
+  elif [ -x "$HOOKS/notes.sh" ]; then
+    # Name the destination HERE, not in a paragraph the user read once at
+    # install time. This line prints while the transcript is in flight.
+    if grep -q "claude -p" "$HOOKS/notes.sh" 2>/dev/null; then
+      c_blue "Summarising via $HOOKS/notes.sh — this hook calls 'claude -p', so the transcript is sent to Anthropic"
+    else
+      c_blue "Summarising via $HOOKS/notes.sh"
+    fi
     if "$HOOKS/notes.sh" "$dir/transcript.txt" > "$dir/notes.md" 2>"$dir/.notes.err"; then
       c_ok "notes.md $(wc -l < "$dir/notes.md" | tr -d ' ') lines"
       rm -f "$dir/.notes.err"

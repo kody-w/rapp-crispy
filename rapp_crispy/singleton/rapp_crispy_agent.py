@@ -242,7 +242,8 @@ class RappCrispyAgent(BasicAgent):
             "description": (
                 "Local-first meeting stack. Records a meeting, denoises it with "
                 "RNNoise, transcribes it on a local whisper.cpp server and writes "
-                "notes via a user-owned hook. Audio and transcripts never leave "
+                "notes via a user-owned hook whose default sends the transcript "
+                "to Anthropic. Audio, denoising and transcription never leave "
                 "the machine. Actions: doctor, record, denoise, transcribe, notes, "
                 "run, list, read, bench, live_status."
             ),
@@ -309,7 +310,9 @@ class RappCrispyAgent(BasicAgent):
             f"  dictionary          {_dict_path() if os.path.exists(_dict_path()) else 'none'}",
             f"  meetings            {MEETINGS}",
             "",
-            "Nothing here uploads. Denoise is local ffmpeg, ASR is localhost, "
+            "Denoise is local ffmpeg, ASR is localhost, and note-writing runs "
+            "the hook at ~/.rappcrispy/hooks/notes.sh — whose default calls "
+            "`claude -p`, sending the transcript to Anthropic. "
             "notes go through your own hook.",
         ]
         return "\n".join(lines)

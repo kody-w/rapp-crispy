@@ -95,6 +95,8 @@ cat <<'PERMS'
   crispy run --seconds 30 --name test
   crispy list
 
- Everything stays in ~/.rappcrispy/meetings/. Nothing is uploaded.
+ Everything stays in ~/.rappcrispy/meetings/. One exception: the default
+ notes hook (~/.rappcrispy/hooks/notes.sh) calls 'claude -p', which sends the
+ transcript to Anthropic. Replace or delete it to keep everything offline.
 ============================================================
 PERMS
