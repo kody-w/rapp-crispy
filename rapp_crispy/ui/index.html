@@ -59,7 +59,7 @@
     <b>Where your data is.</b> Recordings, transcripts and notes are plain files under
     <span class="mono">~/.rappcrispy/meetings/</span>. Denoising is ffmpeg on this machine,
     transcription is a whisper.cpp server bound to <span class="mono">127.0.0.1</span>, and
-    summarisation runs through a hook you control. Nothing is uploaded.
+    summarisation runs through a hook you control &mdash; and the DEFAULT hook uses <code>claude -p</code>, which sends the transcript to Anthropic. Point it at a local model (Ollama) for a fully offline pipeline.
   </div>
 
   <div class="row">

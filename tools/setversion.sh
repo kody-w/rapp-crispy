@@ -37,7 +37,20 @@ json.dump({"schema": "rapp-egg/1.0", "id": "rapp_crispy", "version": sys.argv[1]
                     "credentials or personal paths.")},
           open('.eggbuild/EGG.json', 'w'), indent=2)
 PY
+# Packed by the canonical deterministic packer, NOT by `zip`. `zip` stamps each
+# entry with its mtime, so two packs of identical content produced different
+# bytes and the published egg_sha256 matched nothing. Hard-fail rather than fall
+# back: a silently non-reproducible egg is the bug this replaced.
+PACK=""
+for c in "$PWD/../rapp-tools/tools/packegg.py" "${RAPPTOOLS_HOME:-}/tools/packegg.py"; do
+  [ -f "$c" ] && { PACK="$c"; break; }
+done
+if [ -z "$PACK" ]; then
+  echo "cannot find packegg.py — clone kody-w/rapp-tools beside this repo, or set" >&2
+  echo "RAPPTOOLS_HOME. Refusing to pack a non-reproducible egg with plain zip." >&2
+  exit 1
+fi
 rm -f rapp_crispy/eggs/rapp_crispy.egg
-( cd .eggbuild && find . -type f | sort | zip -q -X -o ../rapp_crispy/eggs/rapp_crispy.egg -@ )
+python3 "$PACK" .eggbuild rapp_crispy/eggs/rapp_crispy.egg
 rm -rf .eggbuild
-echo "egg rebuilt: $(shasum -a 256 rapp_crispy/eggs/rapp_crispy.egg | cut -c1-16)…"
+echo "NOTE: run rapp-tools/tools/rebuild-eggs.sh to restamp the catalogue digest." 

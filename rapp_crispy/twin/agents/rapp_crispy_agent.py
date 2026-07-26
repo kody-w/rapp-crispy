@@ -38,7 +38,7 @@ __manifest__ = {
     "version": "1.2.1",
     "description": (
         "Local-first meeting stack: record, RNNoise denoise, local whisper.cpp "
-        "transcription and hook-driven notes. Nothing is uploaded."
+        "transcription and hook-driven notes."
     ),
     "author": "@kody-w",
     "tags": ["meetings", "audio", "denoise", "transcription", "local-first", "privacy"],
@@ -75,6 +75,9 @@ _VIRTUAL_HINTS = ("blackhole", "loopback", "aggregate", "virtual", "soundflower"
 
 
 def _ffmpeg():
+    for c in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
+        if os.path.exists(c):
+            return c
     return shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
 
 

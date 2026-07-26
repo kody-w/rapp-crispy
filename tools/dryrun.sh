@@ -8,9 +8,17 @@
 # model output is a suite that goes red for the wrong reason.
 set -uo pipefail
 
+
+# Homebrew prefix differs by architecture (/opt/homebrew on Apple Silicon,
+# /usr/local on Intel). Resolve rather than hardcode, or this file is a no-op
+# on half the Macs it targets.
+brewbin() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
+    [ -x "$p" ] && { echo "$p"; return; }; done
+  command -v "$1" 2>/dev/null || echo "/opt/homebrew/bin/$1"; }
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CRISPY="$HERE/../crispy"
-FF=/opt/homebrew/bin/ffmpeg
+FF=$(brewbin ffmpeg)
 W=/tmp/crispy-test
 FIX="$W/fixtures"
 ASR_PORT="${ASR_PORT:-8765}"

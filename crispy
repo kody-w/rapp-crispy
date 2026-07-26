@@ -29,7 +29,12 @@ MODELS="$CRISPY_HOME/models"
 MEETINGS="$CRISPY_HOME/meetings"
 HOOKS="$CRISPY_HOME/hooks"
 LOGS="$CRISPY_HOME/logs"
-FFMPEG="${FFMPEG:-/opt/homebrew/bin/ffmpeg}"
+# Apple Silicon brew is /opt/homebrew, Intel is /usr/local. Hardcoding the
+# former made this unrunnable on an Intel Mac.
+_brew() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
+    [ -x "$p" ] && { echo "$p"; return; }; done
+  command -v "$1" 2>/dev/null || echo "/opt/homebrew/bin/$1"; }
+FFMPEG="${FFMPEG:-$(_brew ffmpeg)}"
 ASR_PORT="${ASR_PORT:-8765}"
 
 # Denoise engine. Measured on fixtures at 0dB SNR (crispy bench reproduces it):

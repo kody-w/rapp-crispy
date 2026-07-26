@@ -1,6 +1,14 @@
 #!/bin/bash
 # RAPP Crispy installer — idempotent. Safe to re-run.
 set -uo pipefail
+
+# Homebrew prefix differs by architecture (/opt/homebrew on Apple Silicon,
+# /usr/local on Intel). Resolve rather than hardcode, or this file is a no-op
+# on half the Macs it targets.
+brewbin() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
+    [ -x "$p" ] && { echo "$p"; return; }; done
+  command -v "$1" 2>/dev/null || echo "/opt/homebrew/bin/$1"; }
+
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CH="$HOME/.rappcrispy"
 MODELS_URL="https://raw.githubusercontent.com/GregorR/rnnoise-models/master"
@@ -13,7 +21,7 @@ command -v brew >/dev/null || die "Homebrew required: https://brew.sh"
 say "Dependencies"
 if brew list --versions ffmpeg >/dev/null 2>&1; then ok "ffmpeg $(brew list --versions ffmpeg | awk '{print $2}')"
 else say "installing ffmpeg"; brew install ffmpeg || die "brew install ffmpeg failed"; fi
-filters=$(/opt/homebrew/bin/ffmpeg -hide_banner -filters 2>/dev/null)
+filters=$($(brewbin ffmpeg) -hide_banner -filters 2>/dev/null)
 case "$filters" in *arnndn*) ok "arnndn filter available" ;; *) die "this ffmpeg lacks arnndn" ;; esac
 if brew list --versions whisper-cpp >/dev/null 2>&1; then ok "whisper-cpp $(brew list --versions whisper-cpp | awk '{print $2}')"
 else say "installing whisper-cpp"; brew install whisper-cpp || die "brew install whisper-cpp failed"; fi
@@ -55,7 +63,7 @@ MODEL="$HOME/.rappvoice/models/ggml-small.en.bin"
 [ -f "$MODEL" ] || MODEL="$CH/models/ggml-small.en.bin"
 if pgrep -f "whisper-server .*--port $PORT" >/dev/null; then ok "whisper-server already on $PORT"
 elif [ -f "$MODEL" ]; then
-  nohup /opt/homebrew/bin/whisper-server -m "$MODEL" --host 127.0.0.1 --port "$PORT" -l en -t 4 \
+  nohup $(brewbin whisper-server) -m "$MODEL" --host 127.0.0.1 --port "$PORT" -l en -t 4 \
     >> "$CH/logs/whisper-server.log" 2>&1 &
   for _ in $(seq 1 60); do sleep 0.5
     code=$(curl -s -o /dev/null -m 2 -w '%{http_code}' "http://127.0.0.1:$PORT/" || true)

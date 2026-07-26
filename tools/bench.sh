@@ -4,7 +4,15 @@
 #   speech retention       = how much of the talker survives (guards against muting everything)
 #   RTF                    = processed seconds per second of audio; must be < 1 to run live
 set -uo pipefail
-FF=/opt/homebrew/bin/ffmpeg
+
+# Homebrew prefix differs by architecture (/opt/homebrew on Apple Silicon,
+# /usr/local on Intel). Resolve rather than hardcode, or this file is a no-op
+# on half the Macs it targets.
+brewbin() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
+    [ -x "$p" ] && { echo "$p"; return; }; done
+  command -v "$1" 2>/dev/null || echo "/opt/homebrew/bin/$1"; }
+
+FF=$(brewbin ffmpeg)
 FIX=/tmp/crispy/fixtures
 M=/tmp/crispy
 LEAD_T=1.4          # lead-in silence region
