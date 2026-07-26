@@ -35,7 +35,7 @@ from agents.basic_agent import BasicAgent
 __manifest__ = {
     "schema": "rapp-agent/1.0",
     "name": "rapp_crispy",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": (
         "Local-first meeting stack: record, RNNoise denoise, local whisper.cpp "
         "transcription and hook-driven notes."
@@ -266,6 +266,11 @@ class RappCrispyAgent(BasicAgent):
                     "meeting": {"type": "string", "description": "Meeting id (folder name) for notes/read."},
                     "path": {"type": "string", "description": "WAV path for denoise/transcribe."},
                     "screen": {"type": "boolean", "description": "Also capture screen video."},
+                    "notes": {"type": "boolean", "description":
+                              "Write notes via the hook. Default true. Set false "
+                              "for a confidential meeting: the DEFAULT hook calls "
+                              "`claude -p` and sends the transcript to Anthropic, "
+                              "and this is the only way to stop that from here."},
                 },
                 "required": [],
             },
@@ -416,7 +421,7 @@ class RappCrispyAgent(BasicAgent):
         return text, f"transcribed {len(chunks)} chunk(s)"
 
     # -------------------------------------------------------------------- notes
-    def _notes(self, d):
+    def _notes(self, d, run_hook=True):
         if not os.path.isdir(d):
             return f"no such meeting: {d}"
         src = os.path.join(d, "mic.denoised.wav")
@@ -435,6 +440,13 @@ class RappCrispyAgent(BasicAgent):
         words = len(transcript.split())
         if words < 3:
             return f"transcript has {words} words — not enough speech to summarise"
+        # The CLI grew --no-notes; the twin is the surface most people actually
+        # use, and it had no way to decline at all. Someone asking the agent to
+        # record a confidential meeting could not stop the transcript leaving.
+        if not run_hook:
+            return (f"transcript.txt written ({words} words). Notes SKIPPED at "
+                    f"your request — the hook was never called, so the transcript "
+                    f"did not leave this machine.")
         hook = os.path.join(HOOKS, "notes.sh")
         if not os.access(hook, os.X_OK):
             return (f"transcript.txt written ({words} words). No notes hook at "
@@ -622,7 +634,7 @@ class RappCrispyAgent(BasicAgent):
                 if not m:
                     return "notes needs `meeting` (a folder name from action=list)"
                 d = m if os.path.isdir(m) else os.path.join(MEETINGS, m)
-                return self._notes(d)
+                return self._notes(d, kwargs.get("notes", True))
             if action == "record":
                 d = self._record(kwargs.get("seconds"), kwargs.get("name"),
                                  bool(kwargs.get("screen")))
@@ -634,7 +646,7 @@ class RappCrispyAgent(BasicAgent):
                     return d
                 dn, dmsg = self._denoise(os.path.join(d, "mic.wav"),
                                          os.path.join(d, "mic.denoised.wav"))
-                return f"{dmsg}\n\n{self._notes(d)}"
+                return f"{dmsg}\n\n{self._notes(d, kwargs.get('notes', True))}"
             return (f"unknown action '{action}'. Try: doctor, record, denoise, "
                     f"transcribe, notes, run, list, read, bench, live_status")
         except subprocess.TimeoutExpired:

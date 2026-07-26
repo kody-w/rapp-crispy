@@ -1,8 +1,15 @@
 # RAPP Crispy
 
 A local-first meeting stack for macOS. Record a meeting, clean up the audio,
-transcribe it, and get notes with decisions and action items — **entirely on your
-own machine.** No account, no upload, no retention policy to read.
+transcribe it, and get notes with decisions and action items. **Recording,
+denoising and transcription run entirely on your own machine** — no account, no
+retention policy to read.
+
+Note-writing is the one exception, and it is opt-out rather than local by
+default: notes come from `~/.rappcrispy/hooks/notes.sh`, and the hook shipped as
+the default calls `claude -p`, which **sends that transcript to Anthropic**. Use
+`--no-notes` for a meeting that must not leave the machine, or repoint the hook
+at a local model (Ollama) for an entirely offline pipeline.
 
 The files land in `~/.rappcrispy/meetings/<timestamp>/` and stay there.
 

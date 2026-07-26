@@ -1,9 +1,9 @@
 {
   "id": "rapp_crispy",
   "name": "RAPP Crispy",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "summary": "A local-first meeting stack. Records a meeting, removes background noise with RNNoise, transcribes it on a whisper.cpp server bound to 127.0.0.1, and writes Summary / Decisions / Action items / Open questions through a hook you own. Capture, denoising and transcription never leave the machine; the default notes hook calls `claude -p`, which sends the transcript to Anthropic. Denoise quality is measured, not asserted.",
-  "tagline": "Record, denoise, transcribe and summarise meetings entirely on your own machine.",
+  "tagline": "Record, denoise and transcribe meetings entirely on your own machine; summarise through a hook you choose.",
   "category": "productivity",
   "tags": [
     "rapplication",

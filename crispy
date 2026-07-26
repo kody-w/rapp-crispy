@@ -121,7 +121,12 @@ cmd_doctor() {
     && c_ok "denoise models: $(ls "$MODELS"/*.rnnn | wc -l | tr -d ' ')" \
     || c_warn "no .rnnn models in $MODELS — run install.sh"
   [ -x "$HOOKS/notes.sh" ] && c_ok "notes hook installed" || c_warn "no notes hook"
-  c_ok "meetings live in $MEETINGS (yours, on disk, never uploaded)"
+  if grep -q "claude -p" "$HOOKS/notes.sh" 2>/dev/null; then
+    c_ok "meetings live in $MEETINGS (yours, on disk)"
+    c_warn "notes hook sends transcripts to Anthropic — crispy run --no-notes to skip"
+  else
+    c_ok "meetings live in $MEETINGS (yours, on disk, no hook that uploads)"
+  fi
 }
 
 # ------------------------------------------------------------------- record
@@ -325,6 +330,18 @@ mux_playback() {
 }
 
 cmd_run() {
+  # Parse --no-notes HERE. cmd_record also parses it, but cmd_record runs inside
+  # a command substitution AND a pipeline below — two subshells — so its
+  # `export` died with them and `crispy run --no-notes` sent the transcript
+  # anyway, while the usage text promised the opposite.
+  local passthru=()
+  for arg in "$@"; do
+    case "$arg" in
+      --no-notes) export CRISPY_NO_NOTES=1 ;;
+      *) passthru+=("$arg") ;;
+    esac
+  done
+  set -- ${passthru+"${passthru[@]}"}
   local dir; dir=$(cmd_record "$@" | tail -1)
   [ -d "$dir" ] || die "record failed"
   cmd_denoise "$dir/mic.wav" "$dir/mic.denoised.wav" >/dev/null
