@@ -470,6 +470,9 @@ class RappCrispyAgent(BasicAgent):
                            "meetings": rows}, indent=2)
 
     def _read(self, meeting):
+        if not meeting:
+            return ("read needs `meeting` — a folder name from action=list, "
+                    "e.g. 2026-07-25_132122_screen-proof")
         d = meeting if os.path.isdir(meeting) else os.path.join(MEETINGS, meeting or "")
         if not os.path.isdir(d):
             return f"no such meeting: {meeting}"
@@ -593,15 +596,21 @@ class RappCrispyAgent(BasicAgent):
             if action == "denoise":
                 src = kwargs.get("path")
                 if not src or not os.path.exists(src):
-                    return "denoise needs `path` to an existing wav"
+                    return ("denoise needs `path` to an existing wav — "
+                            "use action=list to find a meeting, then point at "
+                            "its mic.wav")
                 _, msg = self._denoise(src)
-                return msg
+                return msg or "denoise finished but reported nothing"
             if action == "transcribe":
                 src = kwargs.get("path")
                 if not src or not os.path.exists(src):
                     return "transcribe needs `path` to an existing wav"
                 text, msg = self._transcribe(src)
-                return text if text is not None else msg
+                if text is None:
+                    return msg
+                # An empty transcript is a real outcome (silence), but returning
+                # "" makes /chat answer with nothing, which reads as a hang.
+                return text.strip() or f"transcribed {src} — no speech detected"
             if action == "notes":
                 m = kwargs.get("meeting")
                 if not m:

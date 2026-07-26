@@ -40,5 +40,6 @@
     ],
     "source_files_collapsed": 1,
     "bundled_at": "2026-07-25T00:00:00Z"
-  }
+  },
+  "egg_note": "The copy of this manifest inside the .egg describes a hatch cartridge: it carries twin/ and state/ only. `agent` and `ui` are bundle-relative paths that live in the source repo, not in the egg \u2014 the twin loads twin/agents/, not singleton/."
 }
