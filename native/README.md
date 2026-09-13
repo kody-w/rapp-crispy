@@ -1,4 +1,8 @@
-# RAPP Crispy native 1.5.0
+# RAPP Crispy native 1.5.1 source successor
+
+The published signed/notarized application remains 1.5.0. Version 1.5.1 is the
+unreleased native source target and requires new release artifacts before
+publication.
 
 A **real SwiftUI/AppKit macOS 14+ application**, not a wrapper around the
 `crispy` shell command. App-owned AVFoundation capture, ScreenCaptureKit video,
@@ -187,6 +191,11 @@ mkdir -p .build/tool-work
 TMPDIR="$PWD/.build/tool-work/" swift test -j 2
 TMPDIR="$PWD/.build/tool-work/" swift build -j 2
 .build/debug/RAPPCrispy --self-check
+xcodegen generate --spec project.yml --quiet
+xcodebuild -project RAPPCrispy.xcodeproj -scheme RAPPCrispy \
+  -configuration Release -destination "generic/platform=macOS" \
+  -derivedDataPath .build/ci-xcode -jobs 2 \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
 cd ..
 ./tools/dryrun.sh --safe
 ./tools/parity.sh
@@ -207,8 +216,9 @@ python3 tools/native_ci.py
 ```
 
 It runs CI-runner unit tests, `swift test -j 2`, `swift build -j 2`,
-`tools/dryrun.sh --safe`, parity and Bash syntax checks, then the built
-`RAPPCrispy --self-check`. Build/cache/work files stay under `native/.build`.
+`tools/dryrun.sh --safe`, parity and Bash syntax checks, an unsigned Xcode app
+build/test, then both built entry points' `RAPPCrispy --self-check`.
+Build/cache/work files stay under `native/.build`.
 Only synthetic fixtures and consent-disabled defaults are used: no microphone,
 screen permission, live audio, actual notes provider, model download or
 distribution signing is invoked. The CI runner also explicitly addresses only its known package

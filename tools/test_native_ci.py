@@ -73,11 +73,26 @@ class NativeCIRunnerTests(unittest.TestCase):
         self.assertTrue(any(command[:2] == ["swift", "build"] and command[-2:] == ["-j", "2"] for command in commands))
         self.assertIn(["bash", "tools/dryrun.sh", "--safe"], commands)
         self.assertIn(["bash", "tools/parity.sh"], commands)
+        self.assertTrue(any(command[:2] == ["xcodegen", "generate"] for command in commands))
+        self.assertTrue(any(command[:2] == ["xcodebuild", "-project"] and command[-1] == "build"
+                            for command in commands))
+        self.assertTrue(any(command[:2] == ["xcodebuild", "-project"] and command[-1] == "test"
+                            for command in commands))
         self.assertNotIn(["bash", "tools/dryrun.sh"], commands)
         for command in commands:
             self.assertNotIn("record", command)
             self.assertNotIn("screencapture", command)
             self.assertNotIn("codesign", command)
+
+    def test_ui_port_and_privacy_copy_match_current_integration(self):
+        import json
+        manifest = json.loads((ROOT / "rapp_crispy/manifest.json").read_text())
+        ui = (ROOT / "rapp_crispy/ui/index.html").read_text()
+        soul = (ROOT / "rapp_crispy/twin/soul.md").read_text()
+        self.assertIn(f"localhost:{manifest['twin']['port']}/chat", ui)
+        self.assertNotIn("localhost:7071/chat", ui)
+        self.assertNotIn("without anything leaving this machine", ui)
+        self.assertNotIn("YES —\nby default", soul)
 
     def test_workflow_uses_both_runners_exact_sha_and_no_signing_secrets(self):
         workflow = (ROOT / ".github/workflows/native-ci.yml").read_text()

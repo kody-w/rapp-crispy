@@ -42,6 +42,7 @@ def explicit_cache_arguments(arguments, directory, native=NATIVE):
             ".build/repositories",
             ".build/ci-swiftpm-cache/repositories",
             ".build/swiftpm-cache/repositories",
+            ".build/ci-xcode/SourcePackages/repositories",
             "build/SourcePackages/repositories",
         )
     }
@@ -75,7 +76,8 @@ def source_identity(root, expected):
     return actual, dirty
 
 
-def planned_checks(root=ROOT, native=NATIVE):
+def planned_checks(root=ROOT, native=NATIVE, architecture=None):
+    architecture = architecture or os.uname().machine
     return [
         ([sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_native_ci.py", "-v"], root),
         (["swift", "test", *PACKAGE_OPTIONS, "-j", "2"], native),
@@ -83,6 +85,27 @@ def planned_checks(root=ROOT, native=NATIVE):
         (["bash", "tools/dryrun.sh", "--safe"], root),
         (["bash", "tools/parity.sh"], root),
         (["bash", "-n", "crispy", "hooks-notes.sh", "install.sh", "tools/dryrun.sh", "tools/parity.sh"], root),
+        (["xcodegen", "generate", "--spec", "project.yml", "--quiet"], native),
+        ([
+            "xcodebuild", "-project", "RAPPCrispy.xcodeproj", "-scheme", "RAPPCrispy",
+            "-configuration", "Release", "-destination", f"platform=macOS,arch={architecture}",
+            "-derivedDataPath", ".build/ci-xcode",
+            "-clonedSourcePackagesDirPath", ".build/ci-xcode/SourcePackages",
+            "-jobs", "2", "-parallel-testing-enabled", "NO",
+            "-disableAutomaticPackageResolution", "-onlyUsePackageVersionsFromResolvedFile",
+            "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
+            f"ARCHS={architecture}", "ONLY_ACTIVE_ARCH=YES", "build",
+        ], native),
+        ([
+            "xcodebuild", "-project", "RAPPCrispy.xcodeproj", "-scheme", "RAPPCrispy",
+            "-configuration", "Debug", "-destination", f"platform=macOS,arch={architecture}",
+            "-derivedDataPath", ".build/ci-xcode",
+            "-clonedSourcePackagesDirPath", ".build/ci-xcode/SourcePackages",
+            "-jobs", "2", "-parallel-testing-enabled", "NO",
+            "-disableAutomaticPackageResolution", "-onlyUsePackageVersionsFromResolvedFile",
+            "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
+            f"ARCHS={architecture}", "ONLY_ACTIVE_ARCH=YES", "test",
+        ], native),
     ]
 
 
@@ -108,6 +131,14 @@ def main():
     real_git = shutil.which("git")
     if not real_git or Path(real_git).resolve() == script:
         raise RuntimeError("Cannot identify the original Git executable")
+    architecture = os.uname().machine
+    if architecture not in ("arm64", "x86_64"):
+        raise RuntimeError("Unsupported native architecture: " + architecture)
+    if not shutil.which("xcodegen"):
+        raise RuntimeError("XcodeGen is required for native application verification")
+    xcode_work = NATIVE / ".build/ci-xcode"
+    if xcode_work.exists():
+        shutil.rmtree(xcode_work)
     environment = os.environ.copy()
     environment.update({
         "CRISPY_CI_REAL_GIT": real_git,
@@ -120,7 +151,7 @@ def main():
         "PYTHONDONTWRITEBYTECODE": "1",
     })
     environment.pop("RAPP_RUNTIME_BIN", None)
-    for command, directory in planned_checks():
+    for command, directory in planned_checks(architecture=architecture):
         run(command, directory, environment)
     command = ["swift", "build", *PACKAGE_OPTIONS, "--show-bin-path"]
     output = subprocess.check_output(command, cwd=NATIVE, env=environment, text=True).strip()
@@ -134,13 +165,19 @@ def main():
     run([str(executable), "--self-check"], NATIVE, environment)
     if untouched.exists():
         raise RuntimeError("The no-capture entrypoint unexpectedly created application state")
+    app_executable = xcode_work / "Build/Products/Release/RAPPCrispy.app/Contents/MacOS/RAPPCrispy"
+    run(["/usr/bin/plutil", "-lint", str(app_executable.parent.parent / "Info.plist")], NATIVE, environment)
+    architectures = subprocess.check_output(["/usr/bin/lipo", "-archs", app_executable], text=True).split()
+    if architectures != [architecture]:
+        raise RuntimeError("Xcode app architecture differs from the runner")
+    run([str(app_executable), "--self-check"], NATIVE, environment)
     result = {
         "kind": "native-ci-checks-only-not-distribution-evidence",
         "status": "passed",
         "source_sha": source,
         "local_uncommitted_changes": dirty,
-        "runner_architecture": os.uname().machine,
-        "checks": "Swift app/core tests and build, safe regressions/parity, Bash syntax, no-capture self-check",
+        "runner_architecture": architecture,
+        "checks": "Swift tests/build, Xcode app build/tests, safe regressions/parity, Bash syntax, no-capture self-check",
         "capture_or_live_audio": False,
         "distribution_signing_or_notarization": False,
     }

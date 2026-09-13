@@ -35,6 +35,8 @@ with [same-source CI](https://github.com/kody-w/rapp-crispy/actions/runs/3473527
 This subsequent metadata/integration revision is separate: federation must pin
 singleton/UI URLs to the published metadata commit, while `desktop.source` and
 the `v1.5.0` tag retain the native-build commit.
+The current native source targets the unreleased 1.5.1 successor; the published
+desktop descriptors intentionally remain bound to 1.5.0.
 
 ## Local data and explicit notes consent
 

@@ -90,6 +90,10 @@ The later manifest/integration metadata commit is distinct from this immutable
 native-build commit. See [the native guide](native/README.md) for capabilities,
 storage, developer builds and per-build verification requirements.
 
+The published native download remains 1.5.0. The current native source targets
+the unreleased 1.5.1 successor; existing release metadata and artifacts remain
+unchanged.
+
 ### Developer/CLI compatibility
 
 The following installer is for existing CLI workflows, **not a prerequisite for
@@ -104,6 +108,9 @@ cd rapp-crispy
 Needs `ffmpeg` (for `arnndn`) and a local whisper.cpp server. If you already run
 [RAPP Voice](https://github.com/kody-w/rapp-voice), you already have the ASR
 server and the personal dictionary — Crispy reuses both.
+The compatibility installer pins RNNoise model sources and verifies every
+downloaded model and DeepFilterNet binary by exact size and SHA-256. It preserves
+normal macOS quarantine/Gatekeeper handling instead of clearing quarantine.
 
 ---
 
@@ -310,25 +317,12 @@ the real configured environment; do not run it as an autonomous release check.
 Retired eggs are not rebuilt or required to match native source adapters;
 `parity.sh --legacy-egg` is an explicit historical archive check.
 
-## Running as a service
+## No automatic service bootstrap
 
-`crispy` works fine ad hoc, but the ASR server and the hatched twin die on logout.
-`install.sh --service` installs two user-level launchd agents — no sudo, no system
-directories:
-
-| Agent | What |
-|---|---|
-| `com.rapp.whisper-server` | the local ASR on 127.0.0.1:8765 (shared with RAPP Voice) |
-| `com.rapp.crispy-twin` | the hatched rapplication on :7090 |
-
-```bash
-launchctl list | grep com.rapp.           # status
-launchctl bootout gui/$(id -u)/com.rapp.crispy-twin   # stop one
-rm ~/Library/LaunchAgents/com.rapp.*.plist            # uninstall entirely
-```
-
-The live virtual microphone is deliberately **not** a service — it holds the
-microphone open, so you start it when you want it.
+The compatibility installer does not install launchd services. Run the legacy
+CLI and localhost ASR explicitly when needed; do not infer a background service
+from an old hatched-twin workflow. The live virtual microphone is deliberately
+not a service—it holds the microphone open, so you start it when you want it.
 
 ## Keeping it from rotting
 
@@ -339,12 +333,12 @@ capability fact asserted in `soul.md` that the tool contradicted.
 
 Two things guard that now, and they are different cures:
 
-- **`tools/setversion.sh` is a generator.** The store spec needs `version` in three
-  files; one command writes all three and rebuilds the egg. Never edit a version by
-  hand.
+- **`tools/setversion.sh` updates active integration declarations.** It verifies
+  the retired egg's fixed SHA-256 before and after the update and never rewrites
+  that historical archive.
 - **`tools/parity.sh` is a detector**, for what a generator cannot cover: the twin
-  agent must be byte-identical to the singleton, the egg must carry the shipped
-  agent, the CLI and agent must resolve the same defaults, and **prose must never
+  agent must be byte-identical to the singleton, the retired egg digest must stay
+  fixed, the CLI and agent must resolve the same defaults, and **prose must never
   assert a fact a tool can compute** — that last rule is why the persona now defers
   to `live_status` instead of claiming a driver is required.
 

@@ -37,8 +37,12 @@ jobs:
           persist-credentials: false
       - name: Show build toolchain
         run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
           xcodebuild -version
           swift --version
+          xcodegen --version
           uname -m
       - name: Run native and legacy no-capture checks
         run: python3 tools/native_ci.py

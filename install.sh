@@ -1,6 +1,6 @@
 #!/bin/bash
 # RAPP Crispy installer — idempotent. Safe to re-run.
-set -uo pipefail
+set -euo pipefail
 
 # Homebrew prefix differs by architecture (/opt/homebrew on Apple Silicon,
 # /usr/local on Intel). Resolve rather than hardcode, or this file is a no-op
@@ -11,11 +11,28 @@ brewbin() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CH="$HOME/.rappcrispy"
-MODELS_URL="https://raw.githubusercontent.com/GregorR/rnnoise-models/master"
+RNNOISE_COMMIT="3eee541a283fd3b8f81b85b1748e3b9ccbefa04d"
+MODELS_URL="https://raw.githubusercontent.com/GregorR/rnnoise-models/$RNNOISE_COMMIT"
 say(){ printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 ok(){ printf '    \033[32m✓\033[0m %s\n' "$*"; }
 warn(){ printf '    \033[33m!\033[0m %s\n' "$*"; }
 die(){ printf '\033[1;31mfatal:\033[0m %s\n' "$*" >&2; exit 1; }
+sha256(){ /usr/bin/shasum -a 256 "$1" | awk '{print $1}'; }
+verify_file(){
+  local path="$1" bytes="$2" expected="$3"
+  [ -f "$path" ] && [ ! -L "$path" ] && [ "$(stat -f%z "$path")" = "$bytes" ] \
+    && [ "$(sha256 "$path")" = "$expected" ]
+}
+download_verified(){
+  local url="$1" destination="$2" bytes="$3" digest="$4" label="$5"
+  local partial="$destination.part"
+  rm -f "$partial"
+  curl -sL --fail -o "$partial" "$url" || { rm -f "$partial"; return 1; }
+  verify_file "$partial" "$bytes" "$digest" \
+    || { rm -f "$partial"; return 1; }
+  mv "$partial" "$destination"
+  ok "$label verified"
+}
 
 command -v brew >/dev/null || die "Homebrew required: https://brew.sh"
 say "Dependencies"
@@ -31,24 +48,53 @@ mkdir -p "$CH"/{models,meetings,hooks,logs}
 ok "$CH/{models,meetings,hooks,logs}"
 
 say "Denoise models"
-for m in bd:beguiling-drafter-2018-08-30 cb:conjoined-burgers-2018-08-28 sh:somnolent-hogwash-2018-09-01 mp:marathon-prescription-2018-08-29 lq:leavened-quisling-2018-08-31; do
-  n=${m%%:*}; d=${m##*:}
-  if [ -s "$CH/models/$n.rnnn" ]; then ok "$n.rnnn present"
-  else curl -sL --fail -o "$CH/models/$n.rnnn" "$MODELS_URL/$d/$n.rnnn" \
-       && ok "$n.rnnn $(stat -f%z "$CH/models/$n.rnnn") bytes" || warn "failed to fetch $n.rnnn"; fi
+for m in \
+  "bd|beguiling-drafter-2018-08-30|299693|ae3f7411e1e6a884f839a4a145c394408398f09854dbc1216ee02faafc98a17b" \
+  "cb|conjoined-burgers-2018-08-28|299741|f1357c4e5be9dee8467bead486dfced2d75b640c26ad0b594fa7f102322371d9" \
+  "sh|somnolent-hogwash-2018-09-01|297646|70bb6685eb0c2a1d18e2918dca3fbfbd39317010b1802eb1b6ea73a92f3fdec0" \
+  "mp|marathon-prescription-2018-08-29|296861|4e84a448a4baf937992aaf4d10c8258007ec5d24219b6647dfd5fb4b563ad231" \
+  "lq|leavened-quisling-2018-08-31|297041|1957528b752799fddf06270bc5469af7cf54c3badc358544ae2abed730943ff9"; do
+  IFS='|' read -r n d bytes digest <<< "$m"
+  destination="$CH/models/$n.rnnn"
+  if [ -e "$destination" ]; then
+    verify_file "$destination" "$bytes" "$digest" \
+      && ok "$n.rnnn verified" \
+      || die "$n.rnnn already exists but does not match its pinned bytes; preserved unchanged at $destination"
+  elif ! download_verified "$MODELS_URL/$d/$n.rnnn" "$destination" "$bytes" "$digest" "$n.rnnn"; then
+    warn "failed to download and verify $n.rnnn; other verified models remain usable"
+  fi
 done
 
 say "DeepFilterNet3 (offline denoise engine)"
 DF="$CH/bin/deep-filter"
 mkdir -p "$CH/bin"
-if [ -x "$DF" ]; then ok "deep-filter present"
+ARCH=$(uname -m)
+case "$ARCH" in
+  arm64)
+    T=aarch64-apple-darwin
+    DF_BYTES=27877081
+    DF_SHA=4601e7f4e4c03e59a4c5b5000216ef3add3e808799cfccd95e14e83ea4611081
+    ;;
+  x86_64)
+    T=x86_64-apple-darwin
+    DF_BYTES=29933512
+    DF_SHA=d3be84003acb7c23e738ad7f70a158ec779a8d233a82e7fa3e717d112eb5b50f
+    ;;
+  *) die "unsupported architecture for the pinned DeepFilterNet binary: $ARCH" ;;
+esac
+if [ -e "$DF" ]; then
+  verify_file "$DF" "$DF_BYTES" "$DF_SHA" \
+    || die "existing deep-filter does not match its pinned bytes; preserved unchanged at $DF"
+  chmod 700 "$DF"
+  ok "deep-filter 0.5.6 ($T) verified"
 else
-  ARCH=$(uname -m); case "$ARCH" in arm64) T=aarch64-apple-darwin ;; *) T=x86_64-apple-darwin ;; esac
-  if curl -sL --fail -o "$DF" "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-$T"; then
-    chmod +x "$DF"; xattr -d com.apple.quarantine "$DF" 2>/dev/null || true
-    ok "deep-filter installed ($(du -h "$DF" | cut -f1), $T)"
+  if download_verified \
+    "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-$T" \
+    "$DF" "$DF_BYTES" "$DF_SHA" "deep-filter 0.5.6 ($T)"; then
+    chmod 700 "$DF"
+    ok "normal macOS quarantine/Gatekeeper behavior was preserved"
   else
-    warn "could not fetch deep-filter — RNNoise still works, ~14dB weaker on steady noise"
+    warn "deep-filter download failed verification; RNNoise remains available"
   fi
 fi
 
