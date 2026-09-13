@@ -37,10 +37,10 @@ from agents.basic_agent import BasicAgent
 __manifest__ = {
     "schema": "rapp-agent/1.0",
     "name": "rapp_crispy",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": (
-        "Local-first meeting stack: record, RNNoise denoise, local whisper.cpp "
-        "transcription and hook-driven notes."
+        "Secondary integration for the RAPP Crispy native macOS app, with "
+        "preserved optional legacy processing and consent-gated provider notes."
     ),
     "author": "@kody-w",
     "tags": ["meetings", "audio", "denoise", "transcription", "local-first", "privacy"],

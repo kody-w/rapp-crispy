@@ -1,108 +1,105 @@
-# RAPP Crispy
+# RAPP Crispy 1.5.0
 
-A local-first meeting stack, packaged as a rapplication. Record a meeting, strip
-the background noise, transcribe it, and get notes — **entirely on the machine the
-brainstem runs on.**
+## Native macOS app first
 
-Recordings, transcripts and notes are plain files under
-`~/.rappcrispy/meetings/<timestamp>/`. Recording, denoising and transcription
-never leave this machine. Note-writing goes through `~/.rappcrispy/hooks/notes.sh`,
-and the hook shipped as the default calls `claude -p` — so the transcript is sent
-to Anthropic unless you repoint that hook at a local model.
+**[Download the native 1.5.0 release](https://github.com/kody-w/rapp-crispy/releases/tag/v1.5.0)**
+for macOS 14.0 or later:
 
-```
-mic (real hardware)  ──►  RNNoise denoise   ffmpeg arnndn, on-device
-screen (optional)    ──►  screen.mov        screencapture, on-device
-                     ──►  whisper.cpp       127.0.0.1, on-device
-                     ──►  notes hook        any local model you point it at
-                     ──►  ~/.rappcrispy/meetings/<ts>/
-```
+- [Apple Silicon (`arm64`) ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-arm64.zip)
+- [Intel (`x86_64`) ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-x86_64.zip)
 
-## Why local matters here
+Double-click the ZIP in Finder, drag `RAPPCrispy.app` to Applications, and launch
+it normally. The ZIP contains a Developer ID signed, notarized/stapled native
+SwiftUI/AppKit app with its local CPU Whisper helper. No Homebrew, Terminal,
+Python, Hammerspoon or local ASR server is required for native capture and
+transcription. Speech model data is selected and downloaded separately in
+Settings, with its source, size, SHA-256 and progress visible.
 
-Commercial tools in this category already run their **noise cancellation**
-on-device — that part was never the problem. What leaves your machine is the
-*meeting content*: recordings and transcripts stored server-side, audio
-transmitted out for transcription. RAPP Crispy takes that half back, which is the
-half that determines whether you can point it at a conversation you are not
-permitted to send to a vendor.
+Nothing records on launch. Choose a microphone and click **Record** to request
+app-owned Microphone permission. Active state, **Stop & process** and
+**Cancel job** are visible. Optional screen/window capture requires explicit
+selection and its own permission; it records **video only**, not remote
+participants or system audio.
 
-## Actions
+Exact archive bytes/hashes and immutable content-addressed publisher reports
+are in `manifest.json`, `index_entry.json` and the
+[main download table](../README.md#native-app). The report filename suffix
+hashes the report itself, not the ZIP. ZIP evidence checks the enclosed app's
+signature, notarization and staple; it does not claim the ZIP has a staple.
+Public byte/reference validation is not independent authentication of Apple
+reports or RAPP/1 acceptance by the Store.
 
-| Action | What it does |
+The native-build source is
+[`656537dacb605d0298a9552ffc882936cec41cc3`](https://github.com/kody-w/rapp-crispy/commit/656537dacb605d0298a9552ffc882936cec41cc3),
+with [same-source CI](https://github.com/kody-w/rapp-crispy/actions/runs/34735277189).
+This subsequent metadata/integration revision is separate: federation must pin
+singleton/UI URLs to the published metadata commit, while `desktop.source` and
+the `v1.5.0` tag retain the native-build commit.
+
+## Local data and explicit notes consent
+
+Native capture, Apple voice processing and Whisper transcription run locally.
+Existing recordings, transcripts and notes stay under
+`~/.rappcrispy/meetings/`. Reading legacy folders does not rewrite them; cancelled
+or failed jobs retain completed files. Model downloads fetch public model data
+without uploading meeting content.
+
+**Notes are disabled by default.** Select a provider executable, name its
+destination, approve its configuration/bytes, and explicitly request notes.
+The example Claude hook sends authorized transcripts to **Anthropic** using
+stdin rather than transcript text in argv. Revocation stops future authorization
+and cancels an active notes job, but cannot recall already transmitted content.
+A user-selected “local” executable is not a network sandbox. Missing provider,
+missing consent, errors or empty output do not create fabricated completed notes.
+
+Native approval does not authorize legacy hooks globally. Legacy CLI/agent
+notes additionally require `CRISPY_NOTES_CONSENT=1` after reviewing the hook;
+`--no-notes` or `notes=false` still skips it.
+
+## Enhancement and loopback boundaries
+
+The native default is **Apple AVFoundation voice processing during capture**.
+It is not DeepFilterNet or RNNoise, and there is no unprocessed original in
+that mode. “Original microphone” explicitly requests no native enhancement;
+a virtual input may already be processed by its owning application.
+
+The existing advanced developer/CLI paths remain available but **unbundled**:
+
+- DeepFilterNet3 requires a trusted `deep-filter` executable; the native adapter
+  expects 0.5.6 and does not enable the rejected `--pf` post-filter.
+- RNNoise requires a compatible FFmpeg `arnndn` filter and a selected `.rnnn` model.
+- A separately configured, compatible **existing loopback** is optional for
+  legacy `crispy live` routing. The native app neither installs a driver nor
+  implements live virtual-microphone routing. Device names/duplex channels are
+  candidates, not proof of working routing or far-end capture.
+
+The original CLI benchmarks and reporting semantics are retained. Their
+noise-floor, speech-retention and RTF measurements **do not describe Apple
+voice processing**. Neither legacy engine reliably removes background voices;
+see the [measured limitations](../README.md#measured-denoise-performance).
+No accent conversion, target-speaker extraction or system/far-end capture is claimed.
+
+## Secondary Python and UI integration
+
+Installing `rapp_crispy_agent.py` or opening the local integration UI **does not
+install the native app**, its runtime/model, or macOS permissions. It requires
+the usual Python `BasicAgent` host; it is optional integration rather than a
+consumer installer.
+
+| Action | With a native app installed / compatibility behavior |
 |---|---|
-| `doctor` | environment check — ffmpeg, arnndn, mic, ASR, models, hook |
-| `run` | record → denoise → transcribe → notes (needs `seconds`) |
-| `record` | capture only (needs `seconds`; add `screen: true` for video) |
-| `denoise` | RNNoise a wav at `path` |
-| `transcribe` | local ASR on a wav at `path` |
-| `notes` | transcript + summary for a `meeting` id |
-| `list` | meetings on disk, as JSON |
-| `read` | notes and transcript for a `meeting` |
-| `bench` | reproduce the denoise numbers on your own hardware |
-| `live_status` | live virtual microphone state and what it needs |
+| `doctor`, `live_status` | Read-only native diagnostics; native live routing is explicitly not implemented |
+| `record`, `run` | Prepare visible app controls only; the user must review choices and press Record |
+| `list`, `read` | Read local meeting files; native and legacy history remains on disk |
+| `notes` | Optional legacy hook path; no cloud execution by default |
+| `denoise`, `transcribe`, `bench` | Preserved legacy/developer paths and their separately configured dependencies |
 
-Headless use requires `seconds` — there is no keypress to stop a recording.
+`CRISPY_BACKEND=legacy` explicitly selects old headless capture; that workflow
+requires `seconds`, its own FFmpeg, denoise models and localhost whisper server.
+`RAPP_CRISPY_APP` can identify an explicit native installation. Native URL
+dispatch never starts recording or grants notes consent by itself.
 
-```json
-{ "action": "run", "seconds": 600, "name": "standup" }
-```
-
-## Requirements
-
-- **ffmpeg** with the `arnndn` filter (`brew install ffmpeg`)
-- **a local whisper.cpp server** on `127.0.0.1:8765`:
-  `whisper-server -m ggml-small.en.bin --host 127.0.0.1 --port 8765 -l en`
-- **RNNoise model files** in `~/.rappcrispy/models/*.rnnn`
-- optional: a notes hook at `~/.rappcrispy/hooks/notes.sh` taking a transcript
-  path as `$1` and printing markdown. Without it you still get transcripts.
-
-## Measured denoise performance
-
-Reproduce with `action: "bench"`. Do not take these on faith.
-
-| Noise @ 0dB SNR | Noise floor reduction | Speech cost |
-|---|---|---|
-| white | **−26 to −28 dB** | −3.9 dB |
-| pink | −15 dB | −3.9 dB |
-| **babble (other voices)** | **−3.2 dB** | −5 to −13 dB |
-
-**Real-time factor 0.014** on an Apple M4 — 70× faster than real time.
-
-### The honest gap
-
-RNNoise separates *voice from non-voice*. Babble is voice, so it barely moves —
-and what little it removes costs more speech than noise. **Do not demo this
-against a café background.** Fans, traffic, keyboards and HVAC it handles well.
-Beating babble needs a different model class (DeepFilterNet-style), which is not
-wired up here.
-
-## Not built
-
-- **Live denoise inside a call.** Needs a loopback CoreAudio device so meeting
-  apps can select it as their microphone. Installing an audio driver changes
-  system audio routing and requires an administrator password, so it is never
-  automated. Compute is not the blocker — RTF is 0.014.
-- **Far-end audio capture.** Needs the same loopback device. Without it, your side
-  is captured well and the room only through your microphone. This is the biggest
-  functional gap versus a cloud meeting assistant.
-- **Accent conversion.** No local model. Not attempted.
-
-## Personal vocabulary (optional)
-
-`~/.rappcrispy/dictionary.txt`, one term per line. Terms are fed to the recogniser
-as a weighted decoding prompt (each term twice, which is what makes invented words
-survive) and the canonical spelling is enforced on the transcript afterwards.
-
-```
-Kubernetes
-PostgreSQL
-# for an invented word that is a homophone of a real one:
-whatever it heard => What you meant
-```
-
-Biasing alone will not fix a true homophone, and the mis-hearing shifts with
-context — so a rewrite line is per-mis-hearing. There is deliberately no fuzzy
-matching: it would corrupt genuine uses of the real word.
+The retired egg is retained as historical data, not regenerated or advertised
+as the 1.5.0 native installer. Identity/protocol records are unchanged.
 
 MIT.
