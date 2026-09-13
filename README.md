@@ -45,12 +45,50 @@ leaves your machine.
 
 ### Native app
 
-The native app is in [`native/`](native/README.md): graphical record/stop/cancel,
-app-owned permissions, local model downloads, audio/transcript history and
-explicit screen/window selection. Default enhancement is **Apple AVFoundation
-voice processing**, not RNNoise/DeepFilterNet. No CLI benchmark score is
-attributed to it. The parent release pipeline assembles the bundled Whisper
-runtime and signs/notarizes the app; source/build success is not a release receipt.
+**[RAPP Crispy 1.5.0 is available](https://github.com/kody-w/rapp-crispy/releases/tag/v1.5.0)**
+for macOS 14.0 or later. These architecture-specific ZIPs contain the
+Developer ID signed, notarized/stapled native application and its bundled
+local CPU Whisper runtime—not a terminal launcher or a Python installer.
+
+| Mac | Download | Exact bytes | SHA-256 |
+|---|---|---:|---|
+| Apple Silicon (`arm64`) | [RAPP Crispy 1.5.0 ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-arm64.zip) | 1,678,209 | `1462693b958fa170f178d01a3e531b8eaee544f6dd7813df46ab9d3698ea5e35` |
+| Intel (`x86_64`) | [RAPP Crispy 1.5.0 ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-x86_64.zip) | 1,908,949 | `80b4650ad805ac9735fc48a6e4163ea50b6e684266e81b1c120967faf3cd7dfe` |
+
+Publisher release reports:
+[Apple Silicon](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-arm64.zip.evidence.2fcc4bd0806156f06cdfaf2bbe485753a73840e5befac564415459074b3ab7a9.json) ·
+[Intel](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-x86_64.zip.evidence.142cbda70a2fb49bb05fb97cc30353e6b5de805ecc9eac8cc1121a3b9075941d.json).
+The content-addressed report suffix hashes the report bytes, not the ZIP.
+Reports describe checks on the enclosed application; ZIP containers are not
+themselves stapled. Public references and byte hashes are inspectable, but
+publisher reports are not independent Apple certification or RAPP/1 acceptance
+by the Store.
+
+1. Download the ZIP for your Mac, double-click it in Finder, and drag
+   `RAPPCrispy.app` to Applications.
+2. Launch RAPP Crispy normally from Applications. Let macOS/Gatekeeper perform
+   its checks; no protection bypass is required. Nothing records on launch.
+3. In Settings, select/download a verified English speech model. The model
+   host receives a model download request, not meeting content.
+4. Choose a microphone and enhancement mode, then click **Record**. Grant
+   Microphone permission to the app only when prompted. **Stop & process**
+   and **Cancel job** are visible, and existing meeting files are preserved.
+5. Screen video requires a separate explicit display/window selection and
+   permission. It is silent video—not system or far-end audio capture.
+6. Notes remain optional and disabled until you approve and request a provider.
+
+Default native enhancement is **Apple AVFoundation voice processing**, not
+RNNoise/DeepFilterNet; no legacy CLI benchmark score applies to it. Advanced
+DeepFilterNet/RNNoise executables and models are **not bundled**. An existing
+compatible loopback is optional for legacy live routing only; the native app
+does not install a driver or implement a live virtual microphone.
+
+Native source:
+[`656537dacb605d0298a9552ffc882936cec41cc3`](https://github.com/kody-w/rapp-crispy/commit/656537dacb605d0298a9552ffc882936cec41cc3).
+[Successful same-source CI](https://github.com/kody-w/rapp-crispy/actions/runs/34735277189).
+The later manifest/integration metadata commit is distinct from this immutable
+native-build commit. See [the native guide](native/README.md) for capabilities,
+storage, developer builds and per-build verification requirements.
 
 ### Developer/CLI compatibility
 
