@@ -1,6 +1,12 @@
 {
   "purpose": "Dependency declaration, not a release, artifact-hash, signing, or notarization receipt.",
   "policy": "The native app never downloads executable code. Release assembly must supply the declared whisper-cli and its licenses for the published architectures. Only explicitly requested, size- and SHA256-verified speech model data is downloaded.",
+  "sharedSupport": {
+    "name": "RAPPDesktopSupport",
+    "repository": "https://github.com/kody-w/rapp-tools.git",
+    "revision": "f0bc616c2aed34f2a88888806ed056ec7bafba61",
+    "delivery": "Compiled from the immutable Swift package source. SwiftPM and Xcode lockfiles are committed; no sibling checkout is needed."
+  },
   "required": [
     {
       "name": "whisper.cpp",

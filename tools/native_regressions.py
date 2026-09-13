@@ -115,6 +115,26 @@ class SafeRegressions(unittest.TestCase):
         self.assertIn("Notes disabled", result.stderr)
         self.assertFalse(self.called.exists())
 
+    def test_approved_shipped_hook_keeps_transcript_out_of_argv(self):
+        arguments = self.work / "provider-arguments.txt"
+        stdin = self.work / "provider-stdin.txt"
+        claude = self.work / "bin/claude"
+        claude.write_text(
+            "#!/bin/sh\nset -eu\n"
+            f"printf '%s\\n' \"$@\" > {shlex.quote(str(arguments))}\n"
+            f"cat > {shlex.quote(str(stdin))}\n"
+            "printf '## Summary\\nSynthetic fixture output.\\n'\n"
+        )
+        os.environ["CRISPY_NOTES_CONSENT"] = "1"
+        result = subprocess.run([str(ROOT / "hooks-notes.sh"), str(self.meeting / "transcript.txt")],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        transcript = (self.meeting / "transcript.txt").read_text()
+        self.assertEqual(stdin.read_text(), transcript)
+        self.assertNotIn(transcript, arguments.read_text())
+        self.assertEqual(arguments.read_text().splitlines()[0], "-p")
+        self.assertIn("Synthetic fixture output.", result.stdout)
+
     def test_cli_notes_disabled_by_default_but_transcript_remains(self):
         result = self.cli("notes", self.meeting)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -254,8 +274,11 @@ class SafeRegressions(unittest.TestCase):
         self.assertRegex(declared["sourceArchiveSHA256"], r"^[0-9a-f]{64}$")
         self.assertTrue(all(path.startswith(("/usr/lib/", "/System/Library/"))
                             for path in declared["dynamicLibraries"]))
-        recipe = ROOT.parent / "rapp-tools/native/dependencies/whisper.json"
-        if recipe.is_file():
+        recipe = next((path for path in [
+            ROOT / "native/.build/checkouts/rapp-tools/native/dependencies/whisper.json",
+            ROOT / "native/build/SourcePackages/checkouts/rapp-tools/native/dependencies/whisper.json",
+        ] if path.is_file()), None)
+        if recipe is not None:
             expected = json.loads(recipe.read_text())
             self.assertEqual(declared["version"], expected["version"])
             self.assertEqual(declared["sourceArchiveURL"], expected["source_url"])
@@ -265,6 +288,31 @@ class SafeRegressions(unittest.TestCase):
         self.assertIn("whisper.cpp v" + declared["version"], notice)
         self.assertIn(declared["sourceCommit"], notice)
         self.assertIn(declared["sourceArchiveSHA256"], notice)
+
+    def test_shared_support_is_immutably_pinned_for_both_build_systems(self):
+        package = (ROOT / "native/Package.swift").read_text()
+        project = (ROOT / "native/project.yml").read_text()
+        expected_url = "https://github.com/kody-w/rapp-tools.git"
+        swift_revision = re.search(r'revision:\s*"([a-f0-9]{40})"', package).group(1)
+        xcode_revision = re.search(r"revision:\s*([a-f0-9]{40})", project).group(1)
+        self.assertEqual(swift_revision, xcode_revision)
+        self.assertNotIn(".package(path:", package)
+        self.assertNotIn("path: ../../rapp-tools", project)
+        self.assertIn(expected_url, package)
+        self.assertIn(expected_url, project)
+        declared_support = json.loads((ROOT / "native/Resources/RuntimeDependencies.json").read_text())["sharedSupport"]
+        self.assertEqual(declared_support["repository"], expected_url)
+        self.assertEqual(declared_support["revision"], swift_revision)
+        for path in [
+            ROOT / "native/Package.resolved",
+            ROOT / "native/RAPPCrispy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+        ]:
+            resolved = json.loads(path.read_text())
+            pin = next(item for item in resolved["pins"] if item["identity"] == "rapp-tools")
+            self.assertEqual(pin["location"], expected_url)
+            self.assertEqual(pin["state"]["revision"], swift_revision)
+            self.assertIsNone(pin["state"].get("branch"))
+            self.assertIsNone(pin["state"].get("version"))
 
     def test_runtime_entrypoint_uses_shared_resolution_without_creating_app_state(self):
         binary = ROOT / "native/.build/debug/RAPPCrispy"

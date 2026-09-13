@@ -108,6 +108,10 @@ Hooks receive the transcript path as argument 1 and
 on stdout and exit successfully. No fabricated `notes.md` is written for a
 missing provider, missing consent, empty response, cancellation or process error.
 Any existing notes/transcript remain available if a new attempt fails.
+The shipped Claude template redirects the transcript file to the provider's
+standard input; transcript content is not placed in argv. Existing custom
+hooks keep their path-based interface. The native runner itself passes only the
+file path and consent marker, not transcript text, as arguments.
 
 Legacy CLI/agent notes are now opt-in too: review the actual hook/destination,
 then use `CRISPY_NOTES_CONSENT=1` for the desired invocation. `--no-notes` and
@@ -160,16 +164,22 @@ upstream README's non-copyrightability assertion, not an invented SPDX license.
 These are **optional advanced-engine packaging blockers**, not a requirement
 to install Homebrew for the Apple voice-processing path.
 
+Both `Package.swift` and `project.yml` pin the shared package to
+`https://github.com/kody-w/rapp-tools.git` at immutable revision
+`f0bc616c2aed34f2a88888806ed056ec7bafba61`. SwiftPM and Xcode shared
+`Package.resolved` files are checked in. The app can resolve/build without a
+sibling RAPP Tools worktree.
+
 The app target has a real bundle ID, usage descriptions, privacy manifest,
 hardened-runtime settings and audio-input entitlement. No signing,
 notarization, Intel-runtime execution or public release success is asserted
-by these source files. The parent owns final runtime assembly, remote shared
-dependency pinning, signing/notarization, catalog/version integration and release.
+by these source files. The parent owns final runtime assembly,
+signing/notarization, catalog/version integration and release.
 
 ## Build and safe checks
 
-The checked-out layout must have parent-owned `rapp-tools` next to this repo.
-For development only:
+The pinned public support package is resolved by SwiftPM/Xcode; no sibling
+checkout or global Git identity change is needed. For development only:
 
 ```bash
 cd native
@@ -181,6 +191,13 @@ cd ..
 ./tools/dryrun.sh --safe
 ./tools/parity.sh
 ```
+
+If a build host enforces Git's `safe.bareRepository=explicit` policy, older
+SwiftPM/Xcode cache commands may need explicit `--git-dir` addressing for their
+known package-cache repositories. This is a build-tool compatibility issue, not
+a missing revision. Our local validation uses a process-local adapter limited
+to those cache paths, without changing Git's safety policy or global identity.
+It is not part of the app and is not needed by end users.
 
 `--self-check` exits before creating app state or accessing a microphone.
 `--runtime-check` additionally resolves the local speech executable through

@@ -174,9 +174,16 @@ For a provider you have verified stays local, a hook might use:
 
 ```bash
 #!/bin/bash
-ollama run llama3.1 "Write meeting notes with Summary, Decisions, Action items,
-Open questions. Only what the transcript supports: $(cat "$1")"
+{
+  printf '%s\n' "Write meeting notes with Summary, Decisions, Action items,
+Open questions. Only what the transcript supports:"
+  cat "$1"
+} | ollama run llama3.1
 ```
+
+The shipped Claude hook likewise sends transcript content over standard input,
+not in process arguments. The first hook argument remains the local transcript
+file path for compatibility.
 
 The prompt tells the model not to invent content the transcript cannot support —
 worth keeping, since ASR errors otherwise become confident fiction.
