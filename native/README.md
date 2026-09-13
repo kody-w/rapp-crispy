@@ -1,8 +1,8 @@
-# RAPP Crispy native 1.5.1 source successor
+# RAPP Crispy native 1.5.1
 
-The published signed/notarized application remains 1.5.0. Version 1.5.1 is the
-unreleased native source target and requires new release artifacts before
-publication.
+The signed/notarized 1.5.1 applications are built from source commit
+`873c06fd2930c8948e61e800abbf10af691ffb2d`. Publication metadata lives in a
+later metadata-only commit.
 
 A **real SwiftUI/AppKit macOS 14+ application**, not a wrapper around the
 `crispy` shell command. App-owned AVFoundation capture, ScreenCaptureKit video,
@@ -154,11 +154,14 @@ Required Whisper source matches the parent-owned build recipe: **v1.9.2,
 `a6abd064fcca8b85e794d205abf328c522e9451db43a3eadc178b883b7d0e9cd`.
 RAPP Tools builds the CPU backend for arm64 and x86_64 with static project
 libraries, linking only macOS system libraries; consumer Macs need no Homebrew,
-SDL, OpenMP or external dylibs. The parent release assembly must package and
-sign the corresponding runtime and licenses for each advertised architecture.
-Place the executable at
-`Contents/Resources/runtime/bin/whisper-cli`. No executable is silently fetched
-by the app. `RAPP_RUNTIME_BIN` is only an explicit development override.
+SDL, OpenMP or external dylibs. The parent release assembly starts from `bin/whisper-cli` in the verified
+pre-sign runtime input and places the signed executable at
+`Contents/MacOS/whisper-cli`. The architecture-specific
+`rapp_crispy-1.5.1-<arch>.release-result.json` assets record both the pre-sign
+runtime manifest and the final post-sign helper hash. Only the enclosing app is
+stapled and Gatekeeper-assessed; the helper is code-signature- and hash-verified.
+No executable is silently fetched by the app. `RAPP_RUNTIME_BIN` is only an
+explicit development override.
 
 DeepFilterNet 0.5.6 Darwin assets exist upstream under MIT/Apache-2.0; no
 release-verified, signed, two-architecture distribution of them is supplied
@@ -178,7 +181,8 @@ The app target has a real bundle ID, usage descriptions, privacy manifest,
 hardened-runtime settings and audio-input entitlement. No signing,
 notarization, Intel-runtime execution or public release success is asserted
 by these source files. The parent owns final runtime assembly,
-signing/notarization, catalog/version integration and release.
+signing/notarization, catalog/version integration and release. The published
+1.5.1 reports are linked from the repository and application READMEs.
 
 ## Build and safe checks
 
