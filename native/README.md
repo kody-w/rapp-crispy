@@ -192,6 +192,33 @@ cd ..
 ./tools/parity.sh
 ```
 
+### Same-repository native CI
+
+`.github/workflows/native-ci.yml` runs on `macos-latest` and `macos-15-intel`
+for pushes, pull requests and manual dispatch. Checkout and the runner verify
+the exact requested source SHA; pull requests test their head commit, not an
+implicit merge checkout. Different source SHAs cannot cancel each other's runs.
+The workflow has read-only repository permission and no signing secrets.
+
+Both jobs execute the same local entrypoint from the repository root:
+
+```bash
+python3 tools/native_ci.py
+```
+
+It runs CI-runner unit tests, `swift test -j 2`, `swift build -j 2`,
+`tools/dryrun.sh --safe`, parity and Bash syntax checks, then the built
+`RAPPCrispy --self-check`. Build/cache/work files stay under `native/.build`.
+Only synthetic fixtures and consent-disabled defaults are used: no microphone,
+screen permission, live audio, actual notes provider, model download or
+distribution signing is invoked. The CI runner also explicitly addresses only its known package
+caches for Git hosts using `safe.bareRepository=explicit`, without overriding
+that policy. Its local result is a test receipt, not distribution evidence.
+
+Publication must reference a genuinely successful public Actions run at the
+final native source SHA. Adding or locally testing the workflow does not create
+such a run; the parent pushes the final commit and verifies Actions before release.
+
 If a build host enforces Git's `safe.bareRepository=explicit` policy, older
 SwiftPM/Xcode cache commands may need explicit `--git-dir` addressing for their
 known package-cache repositories. This is a build-tool compatibility issue, not
