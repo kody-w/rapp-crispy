@@ -1,12 +1,16 @@
-# RAPP Crispy 1.5.0
+# RAPP Crispy 1.5.1
 
 ## Native macOS app first
 
-**[Download the native 1.5.0 release](https://github.com/kody-w/rapp-crispy/releases/tag/v1.5.0)**
+**[Download the native 1.5.1 release](https://github.com/kody-w/rapp-crispy/releases/tag/v1.5.1)**
 for macOS 14.0 or later:
 
-- [Apple Silicon (`arm64`) ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-arm64.zip)
-- [Intel (`x86_64`) ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.0/rapp_crispy-1.5.0-x86_64.zip)
+- [Apple Silicon (`arm64`) ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.1/rapp_crispy-1.5.1-arm64.zip)
+  · [evidence](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.1/rapp_crispy-1.5.1-arm64.zip.evidence.a8477a9c55b4a04b8c057e5be15bf0f24c157d09e6a74ae25e5212692cf2b53b.json)
+  · [provenance](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.1/rapp_crispy-1.5.1-arm64.release-result.json)
+- [Intel (`x86_64`) ZIP](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.1/rapp_crispy-1.5.1-x86_64.zip)
+  · [evidence](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.1/rapp_crispy-1.5.1-x86_64.zip.evidence.78ba17ed51dfbe92c4acb8ed7805a2beaf9bc8fc9a4838b84edffe7f69ef8d81.json)
+  · [provenance](https://github.com/kody-w/rapp-crispy/releases/download/v1.5.1/rapp_crispy-1.5.1-x86_64.release-result.json)
 
 Double-click the ZIP in Finder, drag `RAPPCrispy.app` to Applications, and launch
 it normally. The ZIP contains a Developer ID signed, notarized/stapled native
@@ -30,13 +34,15 @@ Public byte/reference validation is not independent authentication of Apple
 reports or RAPP/1 acceptance by the Store.
 
 The native-build source is
-[`656537dacb605d0298a9552ffc882936cec41cc3`](https://github.com/kody-w/rapp-crispy/commit/656537dacb605d0298a9552ffc882936cec41cc3),
-with [same-source CI](https://github.com/kody-w/rapp-crispy/actions/runs/34735277189).
+[`873c06fd2930c8948e61e800abbf10af691ffb2d`](https://github.com/kody-w/rapp-crispy/commit/873c06fd2930c8948e61e800abbf10af691ffb2d),
+with [same-source CI](https://github.com/kody-w/rapp-crispy/actions/runs/34767506225).
 This subsequent metadata/integration revision is separate: federation must pin
 singleton/UI URLs to the published metadata commit, while `desktop.source` and
-the `v1.5.0` tag retain the native-build commit.
-The current native source targets the unreleased 1.5.1 successor; the published
-desktop descriptors intentionally remain bound to 1.5.0.
+the `v1.5.1` tag retain the native-build commit.
+
+The release provenance distinguishes the pre-sign `bin/whisper-cli` input from
+the final signed `Contents/MacOS/whisper-cli`. Only the enclosing app is stapled
+and Gatekeeper-assessed.
 
 ## Local data and explicit notes consent
 
@@ -102,6 +108,6 @@ requires `seconds`, its own FFmpeg, denoise models and localhost whisper server.
 dispatch never starts recording or grants notes consent by itself.
 
 The retired egg is retained as historical data, not regenerated or advertised
-as the 1.5.0 native installer. Identity/protocol records are unchanged.
+as the 1.5.1 native installer. Identity/protocol records are unchanged.
 
 MIT.
