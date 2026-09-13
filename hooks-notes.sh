@@ -7,6 +7,11 @@
 #   ollama run llama3.1 "$(cat prompt)"
 set -euo pipefail
 
+if [ "${CRISPY_NOTES_CONSENT:-0}" != 1 ] && [ "${2:-}" != "--rappcrispy-explicit-consent" ]; then
+  printf '%s\n' "Notes disabled: this hook sends transcripts to Anthropic via claude -p. Review the provider and explicitly consent in RAPP Crispy Settings, or set CRISPY_NOTES_CONSENT=1 for this CLI invocation." >&2
+  exit 3
+fi
+
 # Homebrew prefix differs by architecture (/opt/homebrew on Apple Silicon,
 # /usr/local on Intel). Resolve rather than hardcode, or this file is a no-op
 # on half the Macs it targets.
@@ -22,7 +27,7 @@ export PATH="$PATH:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/b
 transcript="$(cat "$1")"
 [ -n "$transcript" ] || exit 1
 
-claude -p "You are writing meeting notes from a raw, unpunctuated local transcript. It may contain ASR errors; do not invent content you cannot support from the text.
+exec claude -p "You are writing meeting notes from a raw, unpunctuated local transcript. It may contain ASR errors; do not invent content you cannot support from the text.
 
 Output ONLY markdown, in exactly this structure:
 

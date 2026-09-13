@@ -1,23 +1,28 @@
 # RAPP Crispy
 
-A local-first meeting stack for macOS. Record a meeting, clean up the audio,
-transcribe it, and get notes with decisions and action items. **Recording,
-denoising and transcription run entirely on your own machine** — no account, no
-retention policy to read.
+A local-first meeting stack for macOS, now with a **native macOS 14+ SwiftUI/
+AppKit app** alongside the preserved CLI and agent workflows. Record, enhance,
+transcribe, browse meeting history and play local audio without Terminal,
+Homebrew or Hammerspoon. See [the native app guide](native/README.md) for setup,
+supported capabilities, exact runtime dependencies and release/build gates.
 
-Note-writing is the one exception, and it is opt-out rather than local by
-default: notes come from `~/.rappcrispy/hooks/notes.sh`, and the hook shipped as
-the default calls `claude -p`, which **sends that transcript to Anthropic**. Use
-`--no-notes` for a meeting that must not leave the machine, or repoint the hook
-at a local model (Ollama) for an entirely offline pipeline.
+**Recording, enhancement and transcription stay on this Mac. Notes are disabled
+by default.** The example `~/.rappcrispy/hooks/notes.sh` calls `claude -p`, which
+**sends the transcript to Anthropic**. Native provider approval is bound to the
+chosen executable/destination and can be revoked. Legacy CLI/agent hooks now
+require explicit `CRISPY_NOTES_CONSENT=1`; `--no-notes` / `notes=false` still
+override it. Missing consent or a provider never prevents local recording or
+transcription.
 
 The files land in `~/.rappcrispy/meetings/<timestamp>/` and stay there.
+
+The preserved **developer/CLI pipeline** is:
 
 ```
 mic (real hardware)  ──►  RNNoise denoise      (ffmpeg arnndn, on-device)
 screen (optional)    ──►  screen.mov           (screencapture, on-device)
                      ──►  whisper.cpp ASR      (localhost, on-device)
-                     ──►  notes hook           (claude -p or Ollama, your choice)
+                     ──►  notes hook           (disabled until explicit consent)
                      ──►  ~/.rappcrispy/meetings/<ts>/
 ```
 
@@ -37,6 +42,20 @@ leaves your machine.
 ---
 
 ## Install
+
+### Native app
+
+The native app is in [`native/`](native/README.md): graphical record/stop/cancel,
+app-owned permissions, local model downloads, audio/transcript history and
+explicit screen/window selection. Default enhancement is **Apple AVFoundation
+voice processing**, not RNNoise/DeepFilterNet. No CLI benchmark score is
+attributed to it. The parent release pipeline assembles the bundled Whisper
+runtime and signs/notarizes the app; source/build success is not a release receipt.
+
+### Developer/CLI compatibility
+
+The following installer is for existing CLI workflows, **not a prerequisite for
+the native app**:
 
 ```bash
 git clone https://github.com/kody-w/rapp-crispy.git
@@ -83,7 +102,10 @@ Not claims — `crispy bench` reproduces this. Fixtures are synthesised speech
 mixed with noise at a known SNR; the score is how much quieter the non-speech
 gaps get, and how much of the talker survives.
 
-Two engines ship. `crispy bench` reproduces all of this on your own hardware.
+Two advanced **CLI engine paths** are retained. `crispy bench` reproduces the
+original measurements on your own configured hardware. The native Apple engine
+is different and is **not represented in this table**; advanced binaries are
+optional and are not redistributed by the native source implementation.
 
 | Noise @ 0dB SNR | RNNoise | **DeepFilterNet3** |
 |---|---|---|
@@ -92,7 +114,7 @@ Two engines ship. `crispy bench` reproduces all of this on your own hardware.
 | **babble (other voices)** | +4.2 dB | +4.5 dB |
 | real-time factor | 0.014 | 0.048 |
 
-DFN3 is the default for recorded audio — 14 dB better on steady noise, still 20x
+DFN3 is the CLI default for recorded audio when installed — 14 dB better on steady noise, still 20x
 real time. **Live denoise is always RNNoise**, because `deep-filter` is
 file-to-file with no streaming mode.
 
@@ -145,7 +167,10 @@ Point Crispy at a different dictionary with `CRISPY_DICT=/path/to/dict.txt`.
 ## Notes hook
 
 `~/.rappcrispy/hooks/notes.sh` takes a transcript path as `$1` and prints
-markdown. The shipped hook uses `claude -p`. For fully offline notes:
+markdown. The example uses `claude -p` but is disabled until explicit approval.
+For a reviewed legacy provider, `CRISPY_NOTES_CONSENT=1 crispy notes <meeting>`
+authorizes that invocation; native approval happens in Settings instead.
+For a provider you have verified stays local, a hook might use:
 
 ```bash
 #!/bin/bash
@@ -158,7 +183,7 @@ worth keeping, since ASR errors otherwise become confident fiction.
 
 ---
 
-## Live virtual microphone — working
+## Legacy live virtual microphone — optional existing loopback
 
 `crispy live start` puts a denoised microphone in front of Zoom/Teams/Meet: select
 the loopback device it names as your mic.
@@ -169,10 +194,11 @@ crispy live start      # mic -> RNNoise -> loopback
 crispy live stop
 ```
 
-It needs a *loopback* CoreAudio device — one presenting both an output and an
-input. A dedicated one (BlackHole) needs an administrator password, **but most
-machines already have a loopback installed by a conferencing app**, and `crispy
-live` uses whichever is present. On this machine that meant nothing to install.
+It needs a **compatible, separately configured loopback** CoreAudio device.
+Some machines already have one; names and duplex channels alone do not prove
+that routing works. The native app reports candidate devices and explicitly says
+that native live routing is not implemented. It does not install a driver,
+change routing or claim remote-participant audio capture.
 
 Two implementation notes, both learned the hard way:
 
@@ -220,16 +246,24 @@ would mean measuring *their* denoiser instead of ours.
 ## Tests
 
 ```bash
-./tools/dryrun.sh      # everything
-./tools/parity.sh      # just the no-duplicated-facts checks
-./tools/setversion.sh 1.2.1   # the ONLY way to change the version
+./tools/dryrun.sh --safe  # generated data, no devices/cloud/user meetings
+./tools/parity.sh        # source adapters, native version and catalog parity
 ```
 
-24 assertions, no microphone and no keyboard needed. Deterministic behaviour is
-asserted (denoise floors, RTF, dictionary enforcement, notes structure, that the
-capture device is real hardware). Recogniser output is **measured and printed,
-not asserted** — a suite that asserts on model output goes red for the wrong
-reason.
+Native `swift test -j 2` / `swift build -j 2` commands and workspace isolation
+are documented in [native/README.md](native/README.md). Native source versioning
+is separate from the parent-owned public catalog; do not use the historical
+egg-generating `setversion.sh` as part of native release assembly.
+
+The safe suite covers consent and legacy/native dispatch with generated files,
+dictionary parity and fingerprints of the original algorithms/benchmark
+semantics. Native tests cover WAV conversion, capture/job state using fakes,
+cancellation, meeting persistence, provider revocation/failure, engine identity
+and diagnostic honesty. No real microphone/screen or user meeting is used.
+The old full `dryrun.sh` remains a developer **integration** suite that examines
+the real configured environment; do not run it as an autonomous release check.
+Retired eggs are not rebuilt or required to match native source adapters;
+`parity.sh --legacy-egg` is an explicit historical archive check.
 
 ## Running as a service
 

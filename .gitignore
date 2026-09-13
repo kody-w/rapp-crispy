@@ -10,3 +10,12 @@
 # the publishing gate reads it and says NO-GO — correctly.
 __pycache__/
 *.pyc
+
+# Native development output; shipped resources are tracked separately.
+native/.build/
+native/.swiftpm/
+native/*.xcodeproj/
+native/build/
+native/Resources/runtime/bin/
+native/Resources/runtime/lib/
+.build/
