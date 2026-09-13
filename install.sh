@@ -95,8 +95,9 @@ cat <<'PERMS'
   crispy run --seconds 30 --name test
   crispy list
 
- Everything stays in ~/.rappcrispy/meetings/. One exception: the default
- notes hook (~/.rappcrispy/hooks/notes.sh) calls 'claude -p', which sends the
- transcript to Anthropic. Replace or delete it to keep everything offline.
+ Everything stays in ~/.rappcrispy/meetings/ unless you explicitly authorize
+ a notes provider with CRISPY_NOTES_CONSENT=1. The example notes hook calls
+ 'claude -p' and sends transcripts to Anthropic. Notes are disabled by default.
+ The native .app does not need this developer/CLI installer.
 ============================================================
 PERMS

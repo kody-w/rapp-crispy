@@ -1,0 +1,44 @@
+name: Native CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ci-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: Native tests (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - macos-latest
+          - macos-15-intel
+    env:
+      NATIVE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONDONTWRITEBYTECODE: "1"
+      CRISPY_NO_NOTES: "1"
+      CRISPY_NOTES_CONSENT: "0"
+    steps:
+      - name: Check out the exact native source commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.NATIVE_SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Show build toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          uname -m
+      - name: Run native and legacy no-capture checks
+        run: python3 tools/native_ci.py

@@ -4,8 +4,13 @@
 #   stdout = markdown meeting notes
 #
 # Swap the body for a fully offline model, e.g.:
-#   ollama run llama3.1 "$(cat prompt)"
+#   ollama run llama3.1 < "$1"
 set -euo pipefail
+
+if [ "${CRISPY_NOTES_CONSENT:-0}" != 1 ] && [ "${2:-}" != "--rappcrispy-explicit-consent" ]; then
+  printf '%s\n' "Notes disabled: this hook sends transcripts to Anthropic via claude -p. Review the provider and explicitly consent in RAPP Crispy Settings, or set CRISPY_NOTES_CONSENT=1 for this CLI invocation." >&2
+  exit 3
+fi
 
 # Homebrew prefix differs by architecture (/opt/homebrew on Apple Silicon,
 # /usr/local on Intel). Resolve rather than hardcode, or this file is a no-op
@@ -19,10 +24,9 @@ brewbin() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
 # the person trying to keep the transcript off the network.
 export PATH="$PATH:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-transcript="$(cat "$1")"
-[ -n "$transcript" ] || exit 1
+[ -s "$1" ] || exit 1
 
-claude -p "You are writing meeting notes from a raw, unpunctuated local transcript. It may contain ASR errors; do not invent content you cannot support from the text.
+exec claude -p "You are writing meeting notes from the raw, unpunctuated local transcript supplied on standard input. It may contain ASR errors; do not invent content you cannot support from the text.
 
 Output ONLY markdown, in exactly this structure:
 
@@ -36,7 +40,4 @@ Bullet list. Only decisions actually reached. Write 'None recorded.' if there ar
 Bullet list as '- [ ] owner — task'. Use 'unassigned' when no owner is named. Write 'None recorded.' if there are none.
 
 ## Open questions
-Bullet list, or 'None recorded.'
-
-Transcript:
-$transcript"
+Bullet list, or 'None recorded.'" < "$1"

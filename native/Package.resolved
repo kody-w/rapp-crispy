@@ -1,0 +1,14 @@
+{
+  "originHash" : "b97d3f351cec88e690b4f0abe7e3ed24d004e4c5f3e476d58c18511c02d4ebc2",
+  "pins" : [
+    {
+      "identity" : "rapp-tools",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kody-w/rapp-tools.git",
+      "state" : {
+        "revision" : "f0bc616c2aed34f2a88888806ed056ec7bafba61"
+      }
+    }
+  ],
+  "version" : 3
+}

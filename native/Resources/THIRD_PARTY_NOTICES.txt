@@ -1,0 +1,49 @@
+RAPP Crispy native runtime notices
+
+This file is not evidence that a runtime has been assembled, signed or notarized.
+See RuntimeDependencies.json for pinned provenance and optional, unbundled paths.
+
+whisper.cpp v1.9.2, source commit 306c88f4d1286aec1bf96e544632897886af5501
+https://github.com/ggml-org/whisper.cpp
+Source archive SHA-256:
+a6abd064fcca8b85e794d205abf328c522e9451db43a3eadc178b883b7d0e9cd
+
+MIT License
+
+Copyright (c) 2023-2026 The ggml authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Speech model data: OpenAI Whisper, MIT license. Model source, sizes, hashes and
+license links are exposed before download in Settings and in the shared
+RAPPDesktopSupport.SpeechModels registry. No audio or transcript is submitted
+to the model download host.
+
+Optional advanced engines are not redistributed here:
+- DeepFilterNet 0.5.6: MIT OR Apache-2.0, upstream license and model evidence
+  linked in RuntimeDependencies.json.
+- FFmpeg / arnndn: licensing depends on the chosen build. No universal claim of
+  LGPL-only redistribution is made for a user's executable.
+- GregorR .rnnn models: upstream non-copyrightability assertion, linked in the
+  dependency declaration. No formal model license is invented.
+- A user-selected notes executable has its own license and service terms.
+
+Apple AVFoundation, CoreAudio, ScreenCaptureKit, SwiftUI and AppKit are platform
+APIs supplied by macOS. Apple's voice processing is distinctly labeled and is
+not a redistribution or reimplementation of RNNoise or DeepFilterNet.

@@ -1,0 +1,94 @@
+{
+  "purpose": "Dependency declaration, not a release, artifact-hash, signing, or notarization receipt.",
+  "policy": "The native app never downloads executable code. Release assembly must supply the declared whisper-cli and its licenses for the published architectures. Only explicitly requested, size- and SHA256-verified speech model data is downloaded.",
+  "sharedSupport": {
+    "name": "RAPPDesktopSupport",
+    "repository": "https://github.com/kody-w/rapp-tools.git",
+    "revision": "f0bc616c2aed34f2a88888806ed056ec7bafba61",
+    "delivery": "Compiled from the immutable Swift package source. SwiftPM and Xcode lockfiles are committed; no sibling checkout is needed."
+  },
+  "required": [
+    {
+      "name": "whisper.cpp",
+      "version": "1.9.2",
+      "source": "https://github.com/ggml-org/whisper.cpp",
+      "sourceCommit": "306c88f4d1286aec1bf96e544632897886af5501",
+      "sourceTag": "v1.9.2",
+      "sourceArchiveURL": "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.2.tar.gz",
+      "sourceArchiveSHA256": "a6abd064fcca8b85e794d205abf328c522e9451db43a3eadc178b883b7d0e9cd",
+      "license": "MIT",
+      "licenseURL": "https://raw.githubusercontent.com/ggml-org/whisper.cpp/306c88f4d1286aec1bf96e544632897886af5501/LICENSE",
+      "bundlePath": "Contents/Resources/runtime/bin/whisper-cli",
+      "architectures": ["arm64", "x86_64"],
+      "backend": "cpu",
+      "dynamicLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+        "/usr/lib/libc++.1.dylib"
+      ],
+      "usedFor": "Local speech recognition through RAPPDesktopSupport.SpeechTranscriber; mono 16 kHz PCM WAV, English.",
+      "assembly": "Built from the checksum-pinned source archive by parent-owned RAPP Tools, with static project libraries and only system dynamic libraries. No Homebrew, SDL, OpenMP, external dylibs or executable downloads are required on the consumer Mac."
+    }
+  ],
+  "modelData": {
+    "registry": "RAPPDesktopSupport.SpeechModels",
+    "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+    "repositoryCommit": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "license": "MIT",
+    "licenseURL": "https://github.com/openai/whisper/blob/main/LICENSE",
+    "models": [
+      {
+        "id": "base.en",
+        "filename": "ggml-base.en.bin",
+        "bytes": 147964211,
+        "sha256": "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"
+      },
+      {
+        "id": "small.en",
+        "filename": "ggml-small.en.bin",
+        "bytes": 487614201,
+        "sha256": "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d"
+      }
+    ]
+  },
+  "platformEngine": {
+    "name": "Apple AVAudioEngine voice processing",
+    "minimumSystem": "macOS 14",
+    "delivery": "Operating-system AVFoundation/AudioToolbox APIs, not a redistributed third-party executable.",
+    "claims": "Explicit capture-time engine, not DeepFilterNet/RNNoise. No inherited denoising benchmark or far-end capture claim."
+  },
+  "optionalNotBundled": [
+    {
+      "name": "DeepFilterNet3 deep-filter",
+      "version": "0.5.6",
+      "source": "https://github.com/Rikorose/DeepFilterNet",
+      "sourceCommit": "978576aa8400552a4ce9730838c635aa30db5e61",
+      "sourceTag": "v0.5.6",
+      "license": "MIT OR Apache-2.0",
+      "licenseURL": "https://github.com/Rikorose/DeepFilterNet/blob/978576aa8400552a4ce9730838c635aa30db5e61/LICENSE",
+      "defaultModelEvidence": "https://github.com/Rikorose/DeepFilterNet/blob/978576aa8400552a4ce9730838c635aa30db5e61/libDF/src/tract.rs",
+      "existingDeveloperAssets": [
+        "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-aarch64-apple-darwin",
+        "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-x86_64-apple-darwin"
+      ],
+      "status": "No signed, release-verified two-architecture runtime is supplied by this workstream. Select a trusted existing executable in Settings. The adapter checks reported version 0.5.6 and records the selected executable's SHA256; that is provenance, not a claim of upstream signature verification."
+    },
+    {
+      "name": "ffmpeg arnndn (RNNoise)",
+      "source": "https://ffmpeg.org",
+      "license": "LGPL-2.1-or-later for a qualifying LGPL configuration; GPL or other obligations depend on the supplied build.",
+      "licenseURL": "https://ffmpeg.org/legal.html",
+      "status": "No FFmpeg executable is redistributed. The user-selected executable must advertise arnndn; its actual SHA256 is recorded. A redistributable build requires separately pinned source, build configuration, libraries and license review before bundling."
+    },
+    {
+      "name": "GregorR RNNoise models",
+      "source": "https://github.com/GregorR/rnnoise-models",
+      "sourceCommit": "3eee541a283fd3b8f81b85b1748e3b9ccbefa04d",
+      "legacyDefault": "conjoined-burgers-2018-08-28/cb.rnnn",
+      "upstreamRightsStatement": "The upstream README asserts that work other than tools/ and README.md is non-creative and not subject to copyright; it does not provide a conventional model SPDX license.",
+      "rightsURL": "https://github.com/GregorR/rnnoise-models/blob/3eee541a283fd3b8f81b85b1748e3b9ccbefa04d/README.md",
+      "status": "Model not bundled or downloaded by the native app. A user can select an existing .rnnn file; the actual model SHA256 is recorded."
+    }
+  ],
+  "notesProvider": "No notes provider executable, account, or credentials are bundled. User-selected hooks require separately stored, executable- and destination-bound consent. The example claude hook is cloud-capable and disabled by default."
+}

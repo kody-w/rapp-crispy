@@ -10,3 +10,20 @@
 # the publishing gate reads it and says NO-GO — correctly.
 __pycache__/
 *.pyc
+
+# Native development output; shipped resources are tracked separately.
+native/.build/
+native/.swiftpm/
+# Track only the shared dependency lock inside the generated Xcode project.
+native/*.xcodeproj/*
+!native/RAPPCrispy.xcodeproj/project.xcworkspace/
+native/RAPPCrispy.xcodeproj/project.xcworkspace/*
+!native/RAPPCrispy.xcodeproj/project.xcworkspace/xcshareddata/
+native/RAPPCrispy.xcodeproj/project.xcworkspace/xcshareddata/*
+!native/RAPPCrispy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+native/RAPPCrispy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!native/RAPPCrispy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+native/build/
+native/Resources/runtime/bin/
+native/Resources/runtime/lib/
+.build/

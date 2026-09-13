@@ -12,9 +12,9 @@ done
 CRISPY_DIR="$(cd "$(dirname "$_SELF")" && pwd -P)"
 # RAPP Crispy — a local-first meeting stack. Record, denoise, transcribe and
 # summarise a meeting on this machine. Capture, denoise and transcription are
-# fully local. Note-writing runs through a hook you own; the DEFAULT hook calls
-# `claude -p`, which sends that transcript to Anthropic. Repoint it at a local
-# model, or delete it, for an entirely offline pipeline.
+# fully local. Notes are disabled until CRISPY_NOTES_CONSENT=1 explicitly
+# authorizes the configured hook. The example hook calls `claude -p`, which
+# sends the transcript to Anthropic; review your hook before consenting.
 #
 #   crispy record   [--screen] [--seconds N] [--name X]   capture a meeting
 #   crispy denoise  <in.wav> [out.wav]                    RNNoise denoise
@@ -277,13 +277,31 @@ except Exception: pass'
 }
 
 # --------------------------------------------------------------------- notes
+meeting_audio() {
+  python3 - "$1" <<'PY'
+import json, pathlib, sys
+directory = pathlib.Path(sys.argv[1])
+metadata = directory / "native-meeting.json"
+record = json.loads(metadata.read_text()) if metadata.is_file() else {}
+names = [record.get("enhancedAudioFilename"), record.get("audioFilename"),
+         "mic.denoised.wav", "mic.wav", "mic.voiceprocessed.wav", "microphone.caf"]
+for name in names:
+    if not isinstance(name, str) or not name or pathlib.Path(name).name != name or name in (".", ".."):
+        continue
+    path = directory / name
+    if path.is_file() and path.resolve().parent == directory.resolve():
+        print(path)
+        break
+else:
+    raise SystemExit(1)
+PY
+}
+
 cmd_notes() {
   if [ "${1:-}" = "--no-notes" ]; then export CRISPY_NO_NOTES=1; shift; fi
   local dir="${1:?usage: crispy notes [--no-notes] <meeting-dir>}"
   [ -d "$dir" ] || die "no such meeting: $dir"
-  local src="$dir/mic.denoised.wav"
-  [ -f "$src" ] || src="$dir/mic.wav"
-  [ -f "$src" ] || die "no audio in $dir"
+  local src; src=$(meeting_audio "$dir") || die "no supported microphone audio in $dir"
 
   if [ ! -s "$dir/transcript.txt" ]; then
     c_blue "Transcribing (local)"
@@ -295,6 +313,8 @@ cmd_notes() {
 
   if [ "${CRISPY_NO_NOTES:-0}" = 1 ]; then
     c_ok "notes skipped (--no-notes) — the transcript stays on this machine"
+  elif [ "${CRISPY_NOTES_CONSENT:-0}" != 1 ]; then
+    c_warn "notes disabled — local transcript kept. Review $HOOKS/notes.sh and its destination, then explicitly set CRISPY_NOTES_CONSENT=1 to authorize that provider."
   elif [ -x "$HOOKS/notes.sh" ]; then
     # Name the destination HERE, not in a paragraph the user read once at
     # install time. This line prints while the transcript is in flight.
@@ -303,11 +323,18 @@ cmd_notes() {
     else
       c_blue "Summarising via $HOOKS/notes.sh"
     fi
-    if "$HOOKS/notes.sh" "$dir/transcript.txt" > "$dir/notes.md" 2>"$dir/.notes.err"; then
-      c_ok "notes.md $(wc -l < "$dir/notes.md" | tr -d ' ') lines"
+    local pending="$dir/.notes.$$.${RANDOM}.pending"
+    if "$HOOKS/notes.sh" "$dir/transcript.txt" > "$pending" 2>"$dir/.notes.err" && [ -s "$pending" ]; then
+      if [ -f "$dir/notes.md" ]; then
+        mkdir -p "$dir/.revisions"
+        cp "$dir/notes.md" "$dir/.revisions/notes.$$.${RANDOM}.md" || die "could not preserve previous notes"
+      fi
+      mv "$pending" "$dir/notes.md" || die "could not save generated notes"
+      c_ok "notes.md $(wc -l < "$dir/notes.md" | tr -d ' ') lines (provider output; review against transcript)"
       rm -f "$dir/.notes.err"
     else
-      c_warn "notes hook failed — transcript kept (see $dir/.notes.err)"
+      rm -f "$pending"
+      c_warn "notes hook failed or returned no content — transcript and existing notes kept (see $dir/.notes.err)"
     fi
   else
     c_warn "no notes hook at $HOOKS/notes.sh — transcript only"
@@ -347,7 +374,7 @@ cmd_run() {
   cmd_denoise "$dir/mic.wav" "$dir/mic.denoised.wav" >/dev/null
   mux_playback "$dir"
   cmd_notes "$dir"
-  c_blue "Done — everything is here and nowhere else:"
+  c_blue "Done — completed files are here (a consented notes provider may also have received the transcript):"
   ls -1 "$dir" | sed 's/^/    /'
   echo "$dir"
 }
@@ -487,7 +514,8 @@ cmd_list() {
     [ -d "$d" ] || continue
     any=1
     local secs="?"
-    [ -f "$d/mic.wav" ] && secs=$(python3 -c "import wave;w=wave.open('$d/mic.wav');print(f'{w.getnframes()/w.getframerate():.0f}s')" 2>/dev/null || echo "?")
+    local src; src=$(meeting_audio "$d") || src=""
+    [ -n "$src" ] && secs=$(python3 -c 'import sys,wave;w=wave.open(sys.argv[1]);print(f"{w.getnframes()/w.getframerate():.0f}s")' "$src" 2>/dev/null || echo "?")
     printf '    %-34s %-7s %s%s%s\n' "$(basename "$d")" "$secs" \
       "$([ -f "$d/transcript.txt" ] && echo 'transcript ')" \
       "$([ -f "$d/notes.md" ] && echo 'notes ')" \

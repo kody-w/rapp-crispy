@@ -17,6 +17,9 @@ brewbin() { for p in "/opt/homebrew/bin/$1" "/usr/local/bin/$1"; do
   command -v "$1" 2>/dev/null || echo "/opt/homebrew/bin/$1"; }
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${1:-}" = "--safe" ]; then
+  exec python3 "$HERE/native_regressions.py"
+fi
 CRISPY="$HERE/../crispy"
 FF=$(brewbin ffmpeg)
 W=/tmp/crispy-test
@@ -163,7 +166,7 @@ fi
 # --------------------------------------------------------------------- notes
 head_ "5. Notes hook"
 HOOK="$HOME/.rappcrispy/hooks/notes.sh"
-if [ -x "$HOOK" ] && { command -v claude >/dev/null || [ -x "$HOME/.local/bin/claude" ]; }; then
+if [ "${CRISPY_NOTES_CONSENT:-0}" = 1 ] && [ -x "$HOOK" ] && { command -v claude >/dev/null || [ -x "$HOME/.local/bin/claude" ]; }; then
   cat > "$W/transcript.txt" <<'T'
 okay so the decision is we ship the offline path first and gate the audio driver
 action item claude will write the test suite before we push
@@ -179,7 +182,7 @@ T
     bad "notes hook failed: $(head -1 "$W/notes.err")"
   fi
 else
-  info "SKIP: no notes hook or no claude CLI"
+  info "SKIP: notes require explicit CRISPY_NOTES_CONSENT=1, a hook and provider"
 fi
 
 # ------------------------------------------------------------ meeting layout
