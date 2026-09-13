@@ -1,7 +1,7 @@
 import Foundation
 
 public enum CrispyVersion {
-    public static let current = "1.5.0"
+    public static let current = "1.5.1"
     public static let bundleID = "io.rapp.crispy"
 }
 

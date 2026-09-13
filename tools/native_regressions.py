@@ -41,6 +41,7 @@ PRESERVED = {
     "agent:_bench": "f420ce4be33a8804e31eec955e81eccec91318eb293031553d11a62b0c8f5426",
     "tools/bench.sh": "d463bdf5f3bfb161aa20ff741c5e7113d4e0b92b3a8620669e5295898e10b828",
 }
+RETIRED_EGG_SHA256 = "f01295ae5c64ced135fbe33993b23b3d191045ecb46d66ea6fa0c6671ea55737"
 
 
 class SafeRegressions(unittest.TestCase):
@@ -248,6 +249,33 @@ class SafeRegressions(unittest.TestCase):
                     text = (ROOT / key).read_bytes()
                 self.assertEqual(hashlib.sha256(text).hexdigest(), expected)
         self.assertEqual(AGENT.read_bytes(), TWIN.read_bytes())
+
+    def test_retired_egg_is_immutable_and_version_tool_cannot_rebuild_it(self):
+        egg = ROOT / "rapp_crispy/eggs/rapp_crispy.egg"
+        self.assertEqual(hashlib.sha256(egg.read_bytes()).hexdigest(), RETIRED_EGG_SHA256)
+        version_tool = (ROOT / "tools/setversion.sh").read_text()
+        self.assertNotIn("packegg.py", version_tool)
+        self.assertNotIn("rm -f rapp_crispy/eggs/rapp_crispy.egg", version_tool)
+        self.assertIn(RETIRED_EGG_SHA256, version_tool)
+
+    def test_legacy_installer_pins_and_verifies_downloads_without_quarantine_bypass(self):
+        installer = (ROOT / "install.sh").read_text()
+        dependencies = json.loads((ROOT / "native/Resources/RuntimeDependencies.json").read_text())
+        self.assertIn("3eee541a283fd3b8f81b85b1748e3b9ccbefa04d", installer)
+        self.assertIn("download_verified", installer)
+        self.assertNotIn("rnnoise-models/master", installer)
+        self.assertNotIn("xattr -d com.apple.quarantine", installer)
+        deep_filter = dependencies["optionalNotBundled"][0]
+        for digest in deep_filter["downloadSHA256"].values():
+            self.assertIn(digest, installer)
+        for size in deep_filter["downloadBytes"].values():
+            self.assertIn(str(size), installer)
+        rnnoise = next(item for item in dependencies["optionalNotBundled"]
+                       if item["name"] == "GregorR RNNoise models")
+        for digest in rnnoise["modelSHA256"].values():
+            self.assertIn(digest, installer)
+        for size in rnnoise["modelBytes"].values():
+            self.assertIn(str(size), installer)
 
     def test_native_capture_source_targets_macos14_and_never_a_terminal_launcher(self):
         core = ROOT / "native/Sources/RAPPCrispyCore"

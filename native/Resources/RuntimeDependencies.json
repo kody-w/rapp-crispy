@@ -71,7 +71,15 @@
         "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-aarch64-apple-darwin",
         "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-x86_64-apple-darwin"
       ],
-      "status": "No signed, release-verified two-architecture runtime is supplied by this workstream. Select a trusted existing executable in Settings. The adapter checks reported version 0.5.6 and records the selected executable's SHA256; that is provenance, not a claim of upstream signature verification."
+      "downloadSHA256": {
+        "arm64": "4601e7f4e4c03e59a4c5b5000216ef3add3e808799cfccd95e14e83ea4611081",
+        "x86_64": "d3be84003acb7c23e738ad7f70a158ec779a8d233a82e7fa3e717d112eb5b50f"
+      },
+      "downloadBytes": {
+        "arm64": 27877081,
+        "x86_64": 29933512
+      },
+      "status": "No signed two-architecture runtime is bundled with the native app. Select a trusted existing executable in Settings. The legacy installer may fetch only the listed release bytes after exact size/SHA-256 verification and leaves normal macOS quarantine/Gatekeeper handling intact. The adapter checks reported version 0.5.6 and records the selected executable's SHA256; that is provenance, not a claim of upstream signature verification."
     },
     {
       "name": "ffmpeg arnndn (RNNoise)",
@@ -85,9 +93,23 @@
       "source": "https://github.com/GregorR/rnnoise-models",
       "sourceCommit": "3eee541a283fd3b8f81b85b1748e3b9ccbefa04d",
       "legacyDefault": "conjoined-burgers-2018-08-28/cb.rnnn",
+      "modelSHA256": {
+        "bd.rnnn": "ae3f7411e1e6a884f839a4a145c394408398f09854dbc1216ee02faafc98a17b",
+        "cb.rnnn": "f1357c4e5be9dee8467bead486dfced2d75b640c26ad0b594fa7f102322371d9",
+        "sh.rnnn": "70bb6685eb0c2a1d18e2918dca3fbfbd39317010b1802eb1b6ea73a92f3fdec0",
+        "mp.rnnn": "4e84a448a4baf937992aaf4d10c8258007ec5d24219b6647dfd5fb4b563ad231",
+        "lq.rnnn": "1957528b752799fddf06270bc5469af7cf54c3badc358544ae2abed730943ff9"
+      },
+      "modelBytes": {
+        "bd.rnnn": 299693,
+        "cb.rnnn": 299741,
+        "sh.rnnn": 297646,
+        "mp.rnnn": 296861,
+        "lq.rnnn": 297041
+      },
       "upstreamRightsStatement": "The upstream README asserts that work other than tools/ and README.md is non-creative and not subject to copyright; it does not provide a conventional model SPDX license.",
       "rightsURL": "https://github.com/GregorR/rnnoise-models/blob/3eee541a283fd3b8f81b85b1748e3b9ccbefa04d/README.md",
-      "status": "Model not bundled or downloaded by the native app. A user can select an existing .rnnn file; the actual model SHA256 is recorded."
+      "status": "Models are not bundled or downloaded by the native app. A user can select an existing .rnnn file; the actual model SHA256 is recorded. The legacy installer fetches only the commit-pinned files listed here after exact size/SHA-256 verification."
     }
   ],
   "notesProvider": "No notes provider executable, account, or credentials are bundled. User-selected hooks require separately stored, executable- and destination-bound consent. The example claude hook is cloud-capable and disabled by default."

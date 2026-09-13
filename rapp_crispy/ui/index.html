@@ -51,21 +51,22 @@
 <body>
 <header>
   <h1>RAPP Crispy <span class="pill">local-first</span><span class="pill" id="mode">detecting…</span></h1>
-  <div class="sub">Record, denoise, transcribe and summarise meetings without anything leaving this machine.</div>
+  <div class="sub">Local capture and transcription, with separately consented notes and optional hosted integration.</div>
 </header>
 
 <main>
   <div class="banner" id="privacy">
     <b>Where your data is.</b> Recordings, transcripts and notes are plain files under
-    <span class="mono">~/.rappcrispy/meetings/</span>. Denoising is ffmpeg on this machine,
-    transcription is a whisper.cpp server bound to <span class="mono">127.0.0.1</span>, and
-    summarisation runs through a hook you control &mdash; and the DEFAULT hook uses <code>claude -p</code>, which sends the transcript to Anthropic. Point it at a local model (Ollama) for a fully offline pipeline.
+    <span class="mono">~/.rappcrispy/meetings/</span>. The native app uses local AVFoundation
+    processing and bundled Whisper; the preserved legacy path uses ffmpeg and localhost.
+    Notes are off until you approve and request a provider. This hosted panel uses the
+    configured RAPP host, whose conversation model may be remote.
   </div>
 
   <div class="row">
     <button class="primary" id="b-doctor">Check environment</button>
     <button id="b-list">Refresh meetings</button>
-    <button id="b-bench">Benchmark denoise</button>
+    <button id="b-bench">Benchmark legacy denoise</button>
     <button id="b-live">Live mic status</button>
     <span class="status" id="status">idle</span>
   </div>
@@ -76,7 +77,7 @@
     <label style="font-size:13px;color:var(--dim)">
       <input type="checkbox" id="screen"> capture screen
     </label>
-    <button id="b-run">Record &amp; process</button>
+    <button id="b-run">Prepare record &amp; process</button>
   </div>
 
   <div class="card">
@@ -139,8 +140,8 @@
   function call(args, cb){
     if (!bridged){
       cb({ error: "No brainstem bridge. This UI is open standalone.\n\n" +
-        "Hatch the rapplication and open it from the RAPP store, or drive the agent directly:\n\n" +
-        "  curl -s localhost:7071/chat -H 'Content-Type: application/json' \\\n" +
+        "Open this integration from a compatible RAPP host, or drive the agent directly:\n\n" +
+        "  curl -s localhost:7090/chat -H 'Content-Type: application/json' \\\n" +
         "    -d '{\"user_input\":\"RappCrispy " + (args.action || "doctor") + "\"}'\n\n" +
         "Or on the command line:  crispy " + (args.action || "doctor") });
       return;
@@ -188,13 +189,13 @@
 
   $("b-doctor").onclick = function(){ act({ action:"doctor" }, "Environment"); };
   $("b-list").onclick   = function(){ act({ action:"list" }, "Meetings"); };
-  $("b-bench").onclick  = function(){ act({ action:"bench" }, "Denoise benchmark"); };
+  $("b-bench").onclick  = function(){ act({ action:"bench" }, "Legacy denoise benchmark"); };
   $("b-live").onclick   = function(){ act({ action:"live_status" }, "Live virtual microphone"); };
   $("b-run").onclick    = function(){
     var secs = parseInt($("secs").value, 10) || 60;
     act({ action:"run", seconds:secs, name:$("name").value || undefined,
           screen:$("screen").checked || undefined },
-        "Recording " + secs + "s and processing");
+        "Preparing a " + secs + "s recording");
   };
 
   // announce ourselves; hosts reply with rapp:ready
