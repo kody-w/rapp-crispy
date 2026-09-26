@@ -1,5 +1,9 @@
 # RAPP Crispy
 
+<!-- rapp1:network-header:start -->
+[![RAPP/1](https://kody-w.github.io/rapp-hive-public/portfolio/badges/rapp-crispy.svg)](https://github.com/kody-w/rapp-hive-public/blob/main/portfolio/repos/rapp-crispy.md) · **New to RAPP?** [Start here: get your Brainstem →](https://github.com/kody-w/rapp-installer#start-here)
+<!-- rapp1:network-header:end -->
+
 A local-first meeting stack for macOS, now with a **native macOS 14+ SwiftUI/
 AppKit app** alongside the preserved CLI and agent workflows. Record, enhance,
 transcribe, browse meeting history and play local audio without Terminal,
